@@ -1,4 +1,4 @@
-# https://github.com/SebLemery/Tcl-scripts/blob/master/lmao.tcl
+# https://github.com/SebLemery/lmao.tcl
 ###
 # Disclaimer. Right now, this bot is still in BETA. Stuff might be broken, 
 # fires and explosions could happen, debris will probably fall on you too.
@@ -36,10 +36,9 @@ set cc(backmode) "+s"
 # ***You don't have to edit anything beyond this point. ***
 # ***You don't have to edit anything beyond this point. ***
 
-# Script version. Useful to keep track of the latest devlopement of this script.
-# Don't change it unless you hate puppies. Honestly, just leave it intact.
 set cc(version_number) "4.9.1"
 set cc(version) "\002\[lmao.tcl $cc(version_number)\]\002"
+set cc(www) "https://github.com/SebLemery/lmao.tcl"
 
 ##Binds (n is bot owner, and should have access to everything)
 #Flag v
@@ -242,7 +241,7 @@ proc undobinddcckeepalive {handle idx text } {
 
 proc pub_lmao { handle idx text } {
 		putidx $idx "	Welcome to the lmao.tcl help section"
-		putidx $idx "	Visit: https://github.com/SebLemery/Tcl-scripts/blob/master/lmao.tcl"
+		putidx $idx "	Visit: $cc(www)"
 		putidx $idx "	For a more detailled help, this section is a work in progress"
 }
 
@@ -696,7 +695,7 @@ proc botnick:pub { mynick uhost hand chan text  } {
 
 
 
-set replyctcp "[string trim $cc(version)] Get it from: https://github.com/SebLemery/Tcl-scripts/blob/master/lmao.tcl"
+set replyctcp "[string trim $cc(version)] Get it from: $cc(www)"
 bind ctcp - "VERSION" ctcp:reply
 bind ctcp - "PING" ctcp:reply
 bind ctcp - "TIME" ctcp:reply
@@ -810,7 +809,7 @@ proc pub_whois {nick uhost handle chan text} {
 #version return
 proc pub_version {nick uhost handle chan arg} {
 	global cc
-	puthelp "PRIVMSG $chan :Version: $cc(version) available at: https://github.com/SebLemery/Tcl-scripts/blob/master/lmao.tcl"
+	puthelp "PRIVMSG $chan :Version: $cc(version) available at: $cc(www)"
 }
 
 #alert notifier
