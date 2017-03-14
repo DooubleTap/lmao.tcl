@@ -36,7 +36,7 @@ set cc(backmode) "+s"
 # ***You don't have to edit anything beyond this point. ***
 # ***You don't have to edit anything beyond this point. ***
 
-set cc(version_number) "4.9.1"
+set cc(version_number) "5.0.4"
 set cc(version) "\002\[lmao.tcl $cc(version_number)\]\002"
 set cc(www) "https://github.com/SebLemery/lmao.tcl"
 
