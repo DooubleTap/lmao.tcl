@@ -10,16 +10,16 @@
 set cc(cmdchar) "!"
 
 # Main public channel
-set cc(mainchan) "#canada"
+set cc(mainchan) "#mainchan"
 
 # Back/ops channel (private)
-set cc(backchan) "#canada.b"
+set cc(backchan) "#secretchan"
 
 # Back channel modes
-set cc(backmode) "+snt"
+set cc(backmode) "+s"
 
 # Idle deop configuration
-set cc(idledeop_enabled) 0
+set cc(idledeop_enabled) 1
 set cc(idledeop_default_hours) 3
 set cc(idledeop_check_interval) 300
 
@@ -52,10 +52,11 @@ set cc(www) "https://github.com/DooubleTap/lmao.tcl"
 array set module_settings {}
 
 # Default module state (1 = enabled, 0 = disabled)
-set module_defaults(topic) 0
+set module_defaults(topic) 1
 set module_defaults(activevoice) 1
-set module_defaults(idledeop) 0
-set module_defaults(idledevoice) 0
+set module_defaults(idledeop) 1
+set module_defaults(idledevoice) 1
+set module_defaults(chanlog) 1
 
 proc init_channel_modules {chan} {
 	global module_defaults module_settings
@@ -140,6 +141,7 @@ bind pub n|m [string trim $cc(cmdchar)]module module:pub
 bind pub n|m [string trim $cc(cmdchar)]modules module:pub
 bind pub n|m [string trim $cc(cmdchar)]enable module:enable:pub
 bind pub n|m [string trim $cc(cmdchar)]disable module:disable:pub
+bind pub n|m [string trim $cc(cmdchar)]chanlog chanlog:pub
 
 # Module control by /msg - access is checked inside the procs so channel-only
 # masters work too: /msg <bot> disable #chan idledevoice
@@ -147,6 +149,7 @@ bind msg - module module:msg
 bind msg - modules module:msg
 bind msg - enable module:enable:msg
 bind msg - disable module:disable:msg
+bind msg - chanlog chanlog:msg
 
 # Flag n - Owner/Bot control
 bind pub n [string trim $cc(cmdchar)]away pub_do_away
@@ -261,6 +264,7 @@ array set module_desc {
 	topic		{!topic / !topicsync - stores and re-applies the channel topic}
 	activevoice	{auto-voices non-registered users when they talk}
 	idledevoice	{removes voice from non-registered users idle too long}
+	chanlog		{logs access, sanctions and registrations to the ops channel}
 	idledeop	{deops ops who have been idle past the channel limit}
 }
 
@@ -319,10 +323,12 @@ proc module:pub {nick uhost hand chan arg} {
 		toggle_module $chan $module "on"
 		puthelp "NOTICE $nick :\00303\[OK\003\] Module $module is now ENABLED in $chan"
 		putlog "$nick enabled module $module in $chan"
+		chanlog $chan "MODULE" "$nick enabled module \002$module\002"
 	} else {
 		toggle_module $chan $module "off"
 		puthelp "NOTICE $nick :\00304\[OK\003\] Module $module is now DISABLED in $chan"
 		putlog "$nick disabled module $module in $chan"
+		chanlog $chan "MODULE" "$nick disabled module \002$module\002"
 	}
 }
 
@@ -357,6 +363,7 @@ proc module:msg {nick uhost hand text} {
 
 	if {![matchattr $hand n] && ![matchattr $hand m|m $chan]} {
 		puthelp "NOTICE $nick :You do not have access to change modules on $chan"
+		chanlog $chan "DENIED" "$nick tried to change modules by /msg"
 		return
 	}
 
@@ -414,6 +421,7 @@ array set helpdb {
 	module		{{%C%module <list|enable|disable> [module]} {Shows or changes which modules run on THIS channel. Modules: %M%} {%C%module list} {/msg %B% module #chan list}}
 	enable		{{%C%enable <module>} {Turns a module ON for this channel. Modules: %M%} {%C%enable idledevoice} {/msg %B% enable #chan idledevoice}}
 	disable		{{%C%disable <module>} {Turns a module OFF for this channel - use this to stop the idle devoicer or the idle deopper. Modules: %M%} {%C%disable idledevoice} {/msg %B% disable #chan idledevoice}}
+	chanlog		{{%C%chanlog [#channel|on|off]} {Shows or sets where this channel's audit log goes. Access changes, sanctions, registrations, denied attempts and bot control all land there} {%C%chanlog #ops} {/msg %B% chanlog #chan #ops}}
 	idledeop	{{%C%idledeop <#channel> [hours]} {Sets the idle-deop timer for a channel (default 3 hours). Master+ only. Switch it off with %C%disable idledeop} {%C%idledeop #canada 2} {}}
 	chanset		{{%C%chanset <+|->setting} {Toggles a per-channel setting: youtube, weather, needhelp, isup} {%C%chanset +weather} {}}
 	join		{{%C%join <#channel>} {Makes the bot join a channel and adds it to the channel list (owner only)} {%C%join #newchan} {}}
@@ -516,6 +524,183 @@ proc showcommands:pub {nick host hand chan text} {
 
 proc showcommands:msg {nick host hand text} {
 	showcommands:send $nick
+}
+
+###########################################################################
+# CHANLOG MODULE - audit trail to the ops channel
+#
+# Every access change, every sanction, every registration and every piece
+# of bot control lands in one channel, so the staff can read what happened
+# without trawling the partyline.
+#
+#   !chanlog                 show where this channel logs, and whether it does
+#   !chanlog #ops            send this channel's log to #ops and switch it on
+#   !chanlog off             stop logging this channel
+#   !chanlog on              start again, to wherever it was pointed
+#
+# Categories: ACCESS (who got what), SANCTION (kick/ban/deop/devoice),
+# REGISTER (self-registration), MODULE (feature toggles), BOT (owner
+# commands), DENIED (refused attempts at privileged commands).
+###########################################################################
+
+# chan (lowercase) -> destination channel
+array set chanlog_dest {}
+
+# Where does this channel's log go? Falls back to the configured back channel.
+proc chanlog:dest {chan} {
+	global cc chanlog_dest
+
+	set key [string tolower $chan]
+	if {[info exists chanlog_dest($key)]} {
+		return $chanlog_dest($key)
+	}
+	return $cc(backchan)
+}
+
+# The one call every action site uses.
+# chan "" means the event is not tied to a channel (owner commands, /msg
+# registrations) - those always go to the configured back channel.
+proc chanlog {chan category text} {
+	global cc botnick
+
+	if {$chan ne "" && [validchan $chan]} {
+		if {![module_enabled $chan "chanlog"]} {
+			return
+		}
+		set dest [chanlog:dest $chan]
+		set where "\002$chan\002 "
+	} else {
+		set dest $cc(backchan)
+		set where ""
+	}
+
+	if {$dest eq ""} {
+		return
+	}
+
+	# Never log a channel into itself - that is how you get a feedback loop
+	if {$chan ne "" && [string equal -nocase $dest $chan]} {
+		return
+	}
+
+	# No point shouting at a channel the bot is not sitting in
+	if {![validchan $dest] || ![botonchan $dest]} {
+		return
+	}
+
+	switch -exact -- $category {
+		"SANCTION" { set colour "\00304" }
+		"DENIED"   { set colour "\00304" }
+		"ACCESS"   { set colour "\00312" }
+		"REGISTER" { set colour "\00307" }
+		"MODULE"   { set colour "\00303" }
+		"BOT"      { set colour "\00308" }
+		default    { set colour "\00314" }
+	}
+
+	puthelp "NOTICE $dest :${colour}\[$category\]\003 $where$text"
+}
+
+proc chanlog:pub {nick uhost hand chan arg} {
+	global cc chanlog_dest
+
+	set c [string trim $cc(cmdchar)]
+	set want [string trim [lindex [split $arg] 0]]
+	set key [string tolower $chan]
+
+	# --- no argument: report ---
+	if {$want eq ""} {
+		if {[module_enabled $chan "chanlog"]} {
+			set state "\00303ON\003"
+		} else {
+			set state "\00304OFF\003"
+		}
+		set dest [chanlog:dest $chan]
+		if {$dest eq ""} {
+			set dest "\002nowhere\002 - set one with ${c}chanlog <#channel>"
+		} elseif {![botonchan $dest]} {
+			append dest " \00304(I am not on that channel)\003"
+		}
+		puthelp "NOTICE $nick :Channel log for \002$chan\002 is \[$state\] and goes to $dest"
+		puthelp "NOTICE $nick :Change it with ${c}chanlog <#channel>, or ${c}chanlog off"
+		return
+	}
+
+	# --- off / on ---
+	if {[string equal -nocase $want "off"]} {
+		toggle_module $chan "chanlog" "off"
+		puthelp "NOTICE $nick :\00304\[OK\003\] Channel logging is now OFF for $chan"
+		putlog "$nick turned channel logging off for $chan"
+		chanlog "" "MODULE" "$nick turned channel logging \002off\002 for $chan"
+		return
+	}
+
+	if {[string equal -nocase $want "on"]} {
+		set dest [chanlog:dest $chan]
+		if {$dest eq ""} {
+			puthelp "NOTICE $nick :Nowhere to log to yet. Use ${c}chanlog <#channel> first."
+			return
+		}
+		toggle_module $chan "chanlog" "on"
+		puthelp "NOTICE $nick :\00303\[OK\003\] Channel logging is now ON for $chan, going to $dest"
+		putlog "$nick turned channel logging on for $chan (to $dest)"
+		chanlog $chan "MODULE" "$nick turned channel logging \002on\002"
+		return
+	}
+
+	# --- set a destination ---
+	if {![string match "#*" $want]} {
+		puthelp "NOTICE $nick :Usage: ${c}chanlog <#channel> | on | off"
+		return
+	}
+
+	if {[string equal -nocase $want $chan]} {
+		puthelp "NOTICE $nick :I will not log \002$chan\002 into itself - pick a different channel."
+		return
+	}
+
+	if {![validchan $want]} {
+		puthelp "NOTICE $nick :I am not on \002$want\002. Add it first with ${c}join $want"
+		return
+	}
+
+	if {![botonchan $want]} {
+		puthelp "NOTICE $nick :\002$want\002 is on my channel list but I am not in it right now - logging will start once I am."
+	}
+
+	set chanlog_dest($key) $want
+	toggle_module $chan "chanlog" "on"
+
+	puthelp "NOTICE $nick :\00303\[OK\003\] $chan will now log to \002$want\002"
+	putlog "$nick set the channel log for $chan to $want"
+	chanlog $chan "MODULE" "$nick set the channel log to \002$want\002"
+}
+
+# /msg <bot> chanlog #channel [#dest|on|off]
+proc chanlog:msg {nick uhost hand text} {
+	global cc botnick
+
+	set parts [split [string trim $text]]
+	set chan [lindex $parts 0]
+	set rest [join [lrange $parts 1 end] " "]
+
+	if {![string match "#*" $chan]} {
+		puthelp "NOTICE $nick :Usage: /msg $botnick chanlog <#channel> \[#logchannel|on|off\]"
+		return
+	}
+
+	if {![validchan $chan]} {
+		puthelp "NOTICE $nick :I am not on $chan"
+		return
+	}
+
+	if {![matchattr $hand n] && ![matchattr $hand m|m $chan]} {
+		puthelp "NOTICE $nick :You do not have access to change logging on $chan"
+		chanlog $chan "DENIED" "$nick tried to change logging by /msg"
+		return
+	}
+
+	chanlog:pub $nick $uhost $hand $chan $rest
 }
 
 ###########################################################################
@@ -803,12 +988,7 @@ proc register:confirm {nick uhost hand token} {
 
 # Tell the ops channel what happened, so registrations are never silent
 proc register:alert_ops {text} {
-	global cc
-
-	if {$cc(backchan) eq ""} {
-		return
-	}
-	puthelp "NOTICE $cc(backchan) :\00304\[REGISTER\]\003 $text"
+	chanlog "" "REGISTER" $text
 }
 
 ###########################################################################
@@ -911,6 +1091,7 @@ proc topic:pub {nick uhost hand chan arg} {
 	putserv "TOPIC $chan :$new_topic"
 	
 	putlog "$nick changed topic in $chan to: $new_topic"
+	chanlog $chan "ACCESS" "$nick set the topic: $new_topic"
 	putserv "NOTICE $nick :Topic updated"
 }
 
@@ -939,6 +1120,7 @@ proc topic:sync {nick uhost hand chan arg} {
 	putserv "TOPIC $chan :$stored_topic"
 	
 	putlog "$nick synced topic in $chan"
+	chanlog $chan "ACCESS" "$nick re-synced the topic"
 	putserv "NOTICE $nick :Topic re-synced"
 }
 
@@ -1127,6 +1309,7 @@ proc ban:pub {nick uhost hand chan arg} {
 	putserv "PRIVMSG $cc(backchan) :\00304\[BAN\003\] $nick banned $target ($ban_mask) - Reason: $reason"
 	
 	putlog "$nick banned $target ($ban_mask) from $chan - Reason: $reason"
+	chanlog $chan "SANCTION" "$nick banned \002$target\002 ($ban_mask) - $reason"
 }
 
 ###########################################################################
@@ -1178,6 +1361,7 @@ proc pub_do_deop {nick host handle channel args} {
 	# Perform deop
 	putserv "MODE $channel -o $who"
 	putlog "$nick deopped $who from $channel"
+	chanlog $channel "SANCTION" "$nick deopped \002$who\002"
 }
 
 ###########################################################################
@@ -1227,6 +1411,8 @@ proc pub_do_devoice {nick host handle channel args} {
 	
 	# Perform devoice
 	putserv "MODE $channel -v $who"
+	putlog "$nick devoiced $who in $channel"
+	chanlog $channel "SANCTION" "$nick devoiced \002$who\002"
 }
 
 ###########################################################################
@@ -1277,6 +1463,7 @@ proc idledeop:pub {nick uhost hand chan arg} {
 	putserv "NOTICE $nick :Idle deop set for $target_chan: $hours hours"
 	putserv "PRIVMSG $cc(backchan) :\00303\[IDLEDEOP\003\] $nick configured idle deop for $target_chan: $hours hours"
 	putlog "$nick set idle deop for $target_chan to $hours hours"
+	chanlog $chan "MODULE" "$nick set idle deop for $target_chan to $hours hours"
 }
 
 proc idledeop:timer {min hour day weekday year} {
@@ -1334,6 +1521,7 @@ proc idledeop:timer {min hour day weekday year} {
 				putserv "MODE $chan -o $user"
 				putserv "PRIVMSG $chan :$user has been deopped for idleness ($hours hours)"
 				putlog "Idle deop: $user deopped from $chan (idle: $user_idle seconds)"
+				chanlog $chan "SANCTION" "auto: deopped \002$user\002 after [expr {$user_idle / 60}] minutes idle"
 			}
 		}
 	}
@@ -1404,6 +1592,7 @@ proc pub_do_op {nick host handle channel args} {
 	
 	putserv "MODE $channel +o $who"
 	putlog "$nick made me op $who in $channel"
+	chanlog $channel "ACCESS" "$nick opped \002$who\002"
 }
 
 proc pub_do_op:msg {nick host handle text} {
@@ -1425,6 +1614,7 @@ proc pub_do_op:msg {nick host handle text} {
 
 	if {![matchattr $handle n] && ![matchattr $handle o|o $chan]} {
 		puthelp "NOTICE $nick :You do not have op access on $chan"
+		chanlog $chan "DENIED" "$nick tried to op by /msg"
 		return
 	}
 
@@ -1463,6 +1653,7 @@ proc pub_do_voice {nick host handle channel args} {
 	
 	putserv "MODE $channel +v $who"
 	putlog "$nick voiced $who in $channel"
+	chanlog $channel "ACCESS" "$nick voiced \002$who\002"
 }
 
 proc pub_do_kick {nick uhost hand chan args} {
@@ -1499,9 +1690,13 @@ proc pub_do_kick {nick uhost hand chan args} {
 	
 	if {$why eq ""} {
 		putserv "KICK $chan $who"
+		set why "no reason given"
 	} else {
 		putserv "KICK $chan $who :$why"
 	}
+
+	putlog "$nick kicked $who from $chan - Reason: $why"
+	chanlog $chan "SANCTION" "$nick kicked \002$who\002 - $why"
 }
 
 proc pub_do_unban {nick host handle channel args} {
@@ -1514,6 +1709,7 @@ proc pub_do_unban {nick host handle channel args} {
 	
 	putserv "MODE $channel -b $who"
 	putlog "$nick removed ban $who from $channel"
+	chanlog $channel "SANCTION" "$nick removed ban $who"
 }
 
 proc pub_do_unperm {nick host handle channel args} {
@@ -1526,6 +1722,7 @@ proc pub_do_unperm {nick host handle channel args} {
 	
 	killchanban $channel $who
 	putlog "$nick removed blacklist $who from $channel"
+	chanlog $channel "SANCTION" "$nick whitelisted $who"
 }
 
 proc pub_do_bans {nick uhost hand chan text} {
@@ -1570,6 +1767,7 @@ proc pub_do_perm {nick host handle channel args} {
 	putserv "KICK $channel $who :$reason"
 	putserv "NOTICE $nick :Blacklisted: $who - $reason"
 	putlog "$nick blacklisted $who ($ban) - Reason: $reason"
+	chanlog $channel "SANCTION" "$nick blacklisted \002$who\002 ($ban) - $reason"
 }
 
 proc pub_do_away {nick host handle channel args} {
@@ -1605,6 +1803,8 @@ proc pub_do_mode {nick host handle channel args} {
 	}
 	
 	putserv "MODE $channel $who"
+	putlog "$nick set mode $who in $channel"
+	chanlog $channel "ACCESS" "$nick set mode \002$who\002"
 }
 
 # Owner commands. The notice goes out BEFORE the action - restart and jump
@@ -1612,18 +1812,21 @@ proc pub_do_mode {nick host handle channel args} {
 proc pub_do_rehash {nick host handle channel args} {
 	putquick "NOTICE $nick :Rehashing TCL script(s)"
 	putlog "$nick requested a rehash"
+	chanlog "" "BOT" "$nick reloaded the scripts (rehash)"
 	rehash
 }
 
 proc pub_do_restart {nick host handle channel args} {
 	putquick "NOTICE $nick :Restarting bot"
 	putlog "$nick requested a restart"
+	chanlog "" "BOT" "$nick restarted the bot"
 	restart
 }
 
 proc pub_do_jump {nick host handle channel args} {
 	putquick "NOTICE $nick :Jumping servers"
 	putlog "$nick requested a server jump"
+	chanlog "" "BOT" "$nick made me jump servers"
 	jump
 }
 
@@ -1631,13 +1834,16 @@ proc pub_do_save {nick host handle channel args} {
 	save
 	putquick "NOTICE $nick :Saved user file and channel file"
 	putlog "$nick requested a userfile save"
+	chanlog "" "BOT" "$nick saved the userfile"
 }
 
 # /msg versions - owner only, checked here because msg binds match global flags
 proc owner:msg {nick host handle text command} {
 	if {![matchattr $handle n]} {
 		puthelp "NOTICE $nick :That command is owner only"
-		putlog "$nick ($handle) tried $command by /msg - denied"
+		set what [string map {pub_do_ ""} $command]
+		putlog "$nick ($handle) tried $what by /msg - denied"
+		chanlog "" "DENIED" "$nick ($handle) tried \002$what\002 by /msg"
 		return
 	}
 	$command $nick $host $handle "msg" ""
@@ -1703,6 +1909,7 @@ proc join:pub {nick uhost hand chan text} {
 	}
 	
 	putlog "Joining $target at $nick's request"
+	chanlog "" "BOT" "$nick had me join \002$target\002"
 	putserv "JOIN :$target"
 	channel add $target
 }
@@ -1722,6 +1929,7 @@ proc part:pub {nick uhost hand chan text} {
 	}
 	
 	putlog "Parting $target at $nick's request"
+	chanlog "" "BOT" "$nick had me leave \002$target\002"
 	putserv "PART $target :bye"
 	channel remove $target
 }
@@ -1736,6 +1944,7 @@ proc botnick:pub {mynick uhost hand chan text} {
 	}
 	
 	putlog "Changing botnick to $newnick"
+	chanlog "" "BOT" "$mynick changed my nick to \002$newnick\002"
 	putserv "NICK $newnick"
 }
 
@@ -1783,6 +1992,8 @@ proc chattr:pub {nick uhost handle chan arg} {
 	
 	chattr $target |$flags $chan
 	puthelp "NOTICE $nick :Updated flags for $target"
+	putlog "$nick set flags $flags on $target in $chan"
+	chanlog $chan "ACCESS" "$nick set flags \002$flags\002 on \002$target\002"
 }
 
 proc adduser:pub {nick uhost handle chan arg} {
@@ -1806,6 +2017,8 @@ proc adduser:pub {nick uhost handle chan arg} {
 	
 	adduser $newuser $hostmask
 	puthelp "NOTICE $nick :User $newuser added"
+	putlog "$nick added user $newuser ($hostmask)"
+	chanlog $chan "ACCESS" "$nick added user \002$newuser\002 ($hostmask)"
 }
 
 proc deluser:pub {nick uhost handle chan arg} {
@@ -1824,6 +2037,8 @@ proc deluser:pub {nick uhost handle chan arg} {
 	
 	deluser $user
 	puthelp "NOTICE $nick :User $user deleted"
+	putlog "$nick deleted user $user"
+	chanlog $chan "ACCESS" "$nick deleted user \002$user\002"
 }
 
 proc pub_whois {nick uhost handle chan text} {
@@ -1881,16 +2096,20 @@ proc pub_info {nick uhost handle chan arg} {
 
 proc pub:say {nick uhost handle chan arg} {
 	puthelp "PRIVMSG $chan :$arg"
+	chanlog $chan "ACCESS" "$nick made me say: $arg"
 }
 
 proc pub:global {nick uhost handle chan arg} {
 	foreach c [channels] {
 		puthelp "PRIVMSG $c :\[GLOBAL\] $arg"
 	}
+	putlog "$nick sent a global: $arg"
+	chanlog "" "BOT" "$nick sent a global message: $arg"
 }
 
 proc pub:act {nick uhost handle chan arg} {
 	puthelp "PRIVMSG $chan :\001ACTION $arg\001"
+	chanlog $chan "ACCESS" "$nick made me act: $arg"
 }
 
 proc pub_do_bot {nick host hand channel text} {

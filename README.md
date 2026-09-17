@@ -22,6 +22,11 @@ bot never floods your channel.
   documentation can't drift away from the commands.
 - **Per-channel modules.** Turn features on and off per channel with `!enable` /
   `!disable`, without touching the config or reloading anything.
+- **Self-registration.** `/msg <bot> register` adds someone to the userfile behind a
+  typed-back confirmation code, re-checks every condition before saving, and tells them to
+  auth with X and set `+x` first so a hidden host gets stored instead of an ISP one.
+- **One audit trail.** The `chanlog` module sends access changes, sanctions, registrations,
+  denied attempts and bot control to an ops channel of your choosing, per channel.
 - **ActiveVoice.** Voices people who actually talk, and takes it back when they go idle.
   Registered regulars (`+n`, `+m`, `+v`) are never touched.
 - **Flag protection.** `+n` and `+m` users and service bots (`X`, `W`) can't be
@@ -83,6 +88,7 @@ to change, or by `/msg` naming the channel.
 | `activevoice` | Auto-voices non-registered users when they talk, and tracks their activity |
 | `idledevoice` | Removes voice from non-registered users who have gone idle |
 | `idledeop` | Deops ops who have been idle past the channel's limit |
+| `chanlog` | Sends the channel's audit trail to the ops channel |
 
 ```
 !module list                          show every module and its state here
@@ -91,8 +97,56 @@ to change, or by `/msg` naming the channel.
 /msg <bot> disable #chan idledevoice   same thing, privately
 ```
 
-> **Note:** module states are held in memory. A `.rehash` or `.restart` puts every
-> module back to its default.
+## Registering users
+
+People can add themselves:
+
+```
+/msg <bot> register [handle]      -> the bot shows what it would store and sends a code
+/msg <bot> verify <code>          -> it re-checks everything, then registers
+```
+
+The code has to be read out of a notice and typed back, which stops scripted bulk
+registration. Nothing is written until it comes back, and every check runs a second time at
+that point — shares a channel, host unchanged, host not already owned, handle still free,
+code not expired. A new registration gets **no access flags**; ops grant those with
+`!chattr`.
+
+Host-based identification is only as good as the host, so the bot says so every time:
+auth with X and set `+x` first, and it stores `<account>.users.undernet.org` — a host only
+that X account can wear — instead of an ISP host that gets recycled to a stranger.
+
+```tcl
+set cc(register_enabled) 1      ;# master switch
+set cc(register_token_life) 300 ;# seconds a code stays valid
+set cc(register_cooldown) 600   ;# seconds between attempts from one host
+set cc(register_handle_max) 9   ;# must not exceed handlen in eggdrop.conf
+set cc(register_flags) ""       ;# flags a registration grants - leave empty
+```
+
+## Channel logging
+
+```
+!chanlog                 where does this channel log, and is it on
+!chanlog #ops            send the log there and switch it on
+!chanlog off             stop logging this channel
+/msg <bot> chanlog #chan #ops
+```
+
+```
+[ACCESS]   #canada boss opped newguy
+[SANCTION] #canada boss banned troll (*!*@troll.host) - spam
+[REGISTER] newguy registered as newguy (*!*@dsl-1-2-3.videotron.ca)
+[MODULE]   #canada boss disabled module idledevoice
+[BOT]      boss reloaded the scripts (rehash)
+[DENIED]   troll (*) tried restart by /msg
+```
+
+Refused attempts are logged too — that is usually the part worth reading. Automatic voice
+and devoice are left out on purpose; they would bury everything else.
+
+> **Note:** module states and chanlog destinations are held in memory. A `.rehash` or
+> `.restart` puts every module back to its default and every log back to `cc(backchan)`.
 
 ---
 
@@ -108,6 +162,7 @@ gives you usage, description and an example.
 | `!help [command]` | Command help, always by notice |
 | `!showcommands` | Every command name in one list |
 | `!verify [nick]` | Access level, flags and registered hosts |
+| `/msg <bot> register` | Register yourself — the bot sends a code to type back |
 | `!version` | Version and repository link |
 
 ### Registered users
@@ -149,6 +204,7 @@ gives you usage, description and an example.
 | `!act <text>` | Action in the channel |
 | `!idledeop <#chan> [hours]` | Set the idle-deop limit |
 | `!module`, `!enable`, `!disable` | Module control |
+| `!chanlog [#chan|on|off]` | Where this channel's audit trail goes |
 
 ### Owner — `+n`
 
