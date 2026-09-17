@@ -1,256 +1,211 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-  <body bgcolor="#FFFFFF" text="#000000" link="#0000FF" vlink=
-  "#800080" alink="#FF0000">
-    <table width="790" border="0" cellspacing="0" cellpadding="0"
-    align="center">
-      <tr>
-        <td>
-          <br />
-          <h1 align="center">
-            lmao.tcl v1.2
-          </h1><br />
-          <br />
-          <hr align="center" size="1" width="100%" />
-          # designed to work with eggdrop 1.8 or higher<br />
-          # lmao.tcl copyright (c) 2017 by Sebastien &lt; <a href="mailto:seblemery+lmaotcl@gmail.com">seblemery+lmaotcl@gmail.com</a>
-          &gt;<br />
-          <br />
-          # Description; # This script is essential for channel
-          management eggdrops. (If you desire public
-          commands)<br />
-          # Most basic commands that you would expect in a channel
-          are included into this script.<br />
-          # !help !op !deop !voice !devoice !kick !ban !bans !unban
-          !perm !unperm !kban !topic<br />
-          # !rehash !restart !jump !save !adduser !deluser !chattr
-          !access !info<br />
-          # !join !part !say !act !global !botnick !away !back !hop
-          !cycle !uptime<br />
-          # And more to come.<br />
-          <br />
-          <br />
-          <h2>
-            Index
-          </h2>
-          <ul>
-            <li>
-              <a href="#description">Description</a>
-            </li>
-            <li>
-              <a href="#commands">Commands</a>
-            </li>
-            <li>
-              <a href="#installation">Installation</a>
-            </li>
-            <li>
-              <a href="#faq">FAQ</a>
-            </li>
-            <li>
-              <a href="#contact">Contact</a>
-            </li>
-            <li>
-              <a href="#disclaimer">DISCLAIMER</a>
-            </li>
-          </ul><br />
-          <br />
-          <br />
-          <a name="description" id="description"></a>
-          <h2>
-            <a name="description" id="description">Description</a>
-          </h2><a name="description" id="description"></a> This bot
-          has protection scripts enabled by default when oped in a
-          channel.<br />
-          If you want some specific users "protected" from those,
-          add them +f<br />
-          <br />
-          <br />
-          <br />
-          <a name="commands" id="commands"></a>
-          <h2>
-            <a name="commands" id="commands">Commands MSG/DCC</a>
-          </h2><a name="commands" id="commands"></a>
-          <h3>
-            DCC Commands
-          </h3><strong>.keepalive (f|f)</strong> - Will sent a
-          blank line every 2 minutes to help you keep the
-          connection in DCC<br />
-          <br />
-          <h3>
-            Self explanatory commands
-          </h3><strong>!op [nick]</strong><br />
-          <strong>!deop [nick]</strong><br />
-          <strong>!voice [nick]</strong><br />
-          <strong>!devoice [nick]</strong><br />
-          <strong>!kick [reason]</strong><br />
-          <strong>!ban [reason]</strong><br />
-          <strong>!perm &lt;*!*@hostname&gt;
-          [reason]</strong><br />
-          <br />
-          <br />
-          Further help is available via the DCC help system. Use
-          <strong>.lmao</strong><br />
-          <br />
-          <br />
-          <a name="installation" id="installation"></a>
-          <h2>
-            <a name="installation" id=
-            "installation">Installation</a>
-          </h2><a name="installation" id="installation"></a>
-          <h3>lmao.tcl</h3>
-	  Get the script from <a href="https://github.com/SebLemery/Tcl-scripts/blob/master/lmao.tcl">HERE</a><br/>
-	  To install this TCL properly you have to copy it to your /scripts/ directory and add these lines to the bottom of your eggdrop.conf:
-          <p>
-            <br />
-            <strong>source scripts/lmao.tcl</strong>
-          </p>
-          <p>
-            <strong><br /></strong>
-          </p>
-          <h3>
-            <strong>Settings Documentation</strong>
-          </h3><br />
-          <table>
-            <tr>
-              <td colspan="2" valign="top">
-                <strong>!help [topic]</strong>
-              </td>
-            </tr>
-            <tr>
-              <td width="5" rowspan="2"></td>
-              <td valign="top">
-                Help system for the bot
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                This should send you /notices with requested
-                informations, i suggest you to put this page on
-                your web server
-              </td>
-            </tr>
-            <tr>
-              <td colspan="3">
-                &nbsp;
-              </td>
-            </tr>
-            <tr>
-              <td colspan="2" valign="top">
-                <strong>Self-explained commands/b&gt;</strong>
-              </td>
-            </tr>
-          </table><strong><br />
-          <br />
-          <br />
-          <a name="faq" id="faq"></a></strong>
-          <h2>
-            <strong><a name="faq" id="faq">FAQ</a></strong>
-          </h2><strong><a name="faq" id="faq"></a></strong>
-          <table>
-            <tr>
-              <td valign="top">
-                Q:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                <strong>I have a question, but it's not listed
-                here.</strong>
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                A:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                Feel free to contact the author at
-                seblemery[remove]@[remove]gmail.com!
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                Q:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                <strong>My bot does not want to start, what do i
-                do?</strong>
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                A:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                Start by unloading every scripts, and then load
-                them one by one, or see a #eggdrop channel for
-                help.
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                Q:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                <strong>I have so much money, i would like to pay
-                you a beer or a car, can i?</strong>
-              </td>
-            </tr>
-            <tr>
-              <td valign="top">
-                A:
-              </td>
-              <td>
-                &nbsp;
-              </td>
-              <td valign="top">
-                Yes, you can. My paypal is my contact email below.
-              </td>
-            </tr>
-          </table><em>Note, you don't have to tip or whatever, but
-          it's always appreciated</em> :)<br />
-          <br />
-          <br />
-          <br />
-          <a name="contact" id="contact"></a>
-          <h2>
-            <a name="contact" id="contact">Contact</a>
-          </h2><a name="contact" id="contact"></a> Contact me via
-          e-mail at <a href=
-          "mailto:seblemery+lmaoTCL@gmail.com">seblemery+lmaoTCL@gmail.com</a>
-          , or catch me on irc usually around Undernet &amp;
-          freenode<br />
-          <br />
-          <br />
-          <a name="disclaimer" id="disclaimer"></a>
-          <h2>
-            <a name="disclaimer" id="disclaimer">DISCLAIMER</a>
-          </h2><a name="disclaimer" id="disclaimer"></a> lmao.tcl
-          is provided 'as is' and without warranty of any
-          kind.<br />
-          <br />
-          <br />
-          <hr align="center" width="50%" />
-          <center>
-            <font size="-1">©March 14th 2017 by Sebastien@UnderNET
-            <a href="#contact">CONTACT</a></font>
-          </center>
-          <hr align="center" width="80%" />
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
+# lmao.tcl
+
+**Channel management for eggdrop, built for UnderNet.**
+
+[![Version](https://img.shields.io/badge/version-6.2.0-blue.svg)](https://github.com/DooubleTap/lmao.tcl)
+[![Eggdrop](https://img.shields.io/badge/eggdrop-1.8%2B-green.svg)](https://www.eggheads.org/)
+[![Tcl](https://img.shields.io/badge/tcl-8.5%2B-orange.svg)](https://www.tcl.tk/)
+[![License](https://img.shields.io/badge/license-GPLv3-lightgrey.svg)](LICENSE)
+
+One script that gives your eggdrop the public commands people actually expect in a
+channel — ops, bans, topic, user management — plus an auto-voice system for regulars
+and idle cleanup for ops and voices. Every reply comes back as a **notice**, so the
+bot never floods your channel.
+
+---
+
+## Highlights
+
+- **No channel spam.** Every command reply is a notice to the user who asked. The bot
+  only speaks in the channel when you explicitly tell it to (`!say`, `!act`, `!global`).
+- **One help table.** `!help` and `/msg <bot> help` share a single source of truth, so
+  documentation can't drift away from the commands.
+- **Per-channel modules.** Turn features on and off per channel with `!enable` /
+  `!disable`, without touching the config or reloading anything.
+- **ActiveVoice.** Voices people who actually talk, and takes it back when they go idle.
+  Registered regulars (`+n`, `+m`, `+v`) are never touched.
+- **Flag protection.** `+n` and `+m` users and service bots (`X`, `W`) can't be
+  deopped, devoiced, kicked or banned by the bot.
+- **UnderNet aware.** Written against ircu behaviour and the `X` service.
+
+---
+
+## Install
+
+```sh
+cd ~/eggdrop/scripts
+wget https://raw.githubusercontent.com/DooubleTap/lmao.tcl/master/lmao.tcl
+```
+
+Add it to your `eggdrop.conf`:
+
+```tcl
+source scripts/lmao.tcl
+```
+
+Then `.rehash` on the partyline. You should see:
+
+```
+[lmao.tcl 6.2.0] - Complete production ready version
+Loaded successfully - ready to serve!
+```
+
+---
+
+## Configure
+
+Everything lives in the `CONFIGURATION SECTION` at the top of the script.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `cc(cmdchar)` | `!` | Command trigger character |
+| `cc(mainchan)` | `#mainchan` | Main public channel |
+| `cc(backchan)` | `#secretchan` | Ops channel that `!ops` alerts |
+| `cc(backmode)` | `+s` | Modes for the back channel |
+| `cc(idledeop_default_hours)` | `3` | Hours before an idle op is deopped |
+| `cc(idledeop_check_interval)` | `300` | Seconds between idle-deop sweeps |
+| `cc(activevoice_idle_hours)` | `3` | Hours before an idle voice is removed |
+| `cc(activevoice_check_interval)` | `300` | Seconds between devoice sweeps |
+| `cc(activevoice_exempt_flags)` | `n m v` | Flags that make a user invisible to ActiveVoice |
+| `cc(protected_bots)` | `X W` | Nicks the bot will never deop |
+| `cc(protected_flags)` | `n m` | Flags that protect a user from deop/devoice |
+
+---
+
+## Modules
+
+Modules are per channel and all default to **on**. Change them in the channel you want
+to change, or by `/msg` naming the channel.
+
+| Module | What it does |
+| --- | --- |
+| `topic` | `!topic` / `!topicsync` — stores the topic and re-applies it when it drifts |
+| `activevoice` | Auto-voices non-registered users when they talk, and tracks their activity |
+| `idledevoice` | Removes voice from non-registered users who have gone idle |
+| `idledeop` | Deops ops who have been idle past the channel's limit |
+
+```
+!module list                          show every module and its state here
+!enable activevoice                   turn one on for this channel
+!disable idledevoice                  turn one off for this channel
+/msg <bot> disable #chan idledevoice   same thing, privately
+```
+
+> **Note:** module states are held in memory. A `.rehash` or `.restart` puts every
+> module back to its default.
+
+---
+
+## Commands
+
+Help is always a notice. `!help` on its own lists the categories; `!help <command>`
+gives you usage, description and an example.
+
+### Everyone
+
+| Command | Description |
+| --- | --- |
+| `!help [command]` | Command help, always by notice |
+| `!showcommands` | Every command name in one list |
+| `!verify [nick]` | Access level, flags and registered hosts |
+| `!version` | Version and repository link |
+
+### Registered users
+
+| Command | Description |
+| --- | --- |
+| `!bot` | Trigger character and support channel |
+| `!info [text\|none]` | Set, show or clear your infoline |
+| `!whois <nick>` | A user's access level and flags |
+| `!ops <reason>` | Alert the ops in the back channel |
+
+### Ops — `+o`
+
+| Command | Description |
+| --- | --- |
+| `!op [nick]` | Give op |
+| `!deop [nick]` | Take op (never `+n`/`+m` users or service bots) |
+| `!voice [nick]` | Give voice |
+| `!devoice [nick]` | Take voice (never `+n`/`+m` users) |
+| `!invite <nick>` | Invite someone in |
+| `!kick <nick> [reason]` | Kick |
+| `!ban <nick> [reason]` | Kick and ban (`*!*@host`) |
+| `!unban <mask>` | Remove a ban |
+| `!bans` | List the channel's bans |
+| `!topic <text>` | Set and store the topic |
+| `!topicsync` | Re-apply the stored topic |
+
+### Masters — `+m`
+
+| Command | Description |
+| --- | --- |
+| `!mode <modes>` | Set channel modes |
+| `!blacklist <nick> [reason]` | Permanent ban |
+| `!whitelist <mask>` | Remove from the blacklist |
+| `!chattr <handle> <+\|-flags>` | Change a user's flags on this channel |
+| `!adduser <handle> [mask]` | Add a user to the bot |
+| `!deluser <handle>` | Remove a user |
+| `!say <text>` | Speak in the channel |
+| `!act <text>` | Action in the channel |
+| `!idledeop <#chan> [hours]` | Set the idle-deop limit |
+| `!module`, `!enable`, `!disable` | Module control |
+
+### Owner — `+n`
+
+| Command | Description |
+| --- | --- |
+| `!join <#chan>` / `!part <#chan>` | Join or leave, updating the channel list |
+| `!comeback` | Part and rejoin here |
+| `!botnick <nick>` | Change the bot's nick |
+| `!away <msg>` / `!back` | Set or clear the away message |
+| `!global <text>` | Message every channel |
+| `!rehash` / `!restart` | Reload scripts / restart the bot |
+| `!jump` | Jump to another server |
+| `!save` | Write the userfile and channel file |
+| `!chanset <+\|->setting` | Toggle `youtube`, `weather`, `needhelp`, `isup` |
+| `!uptime` | How long the bot has been up |
+
+### By private message
+
+Anything that needs a channel takes it as the first argument. Access is checked on the
+channel you name, so channel-only ops and masters work too.
+
+```
+/msg <bot> help [command]
+/msg <bot> showcommands
+/msg <bot> verify [nick]
+/msg <bot> op #chan [nick]
+/msg <bot> module #chan list
+/msg <bot> enable #chan <module>
+/msg <bot> disable #chan <module>
+/msg <bot> rehash | restart | jump | save
+```
+
+---
+
+## How ActiveVoice works
+
+1. Someone who is **not** a registered `+n`/`+m`/`+v` user talks in the channel.
+2. The bot voices them and starts their activity clock.
+3. If they stop talking for `activevoice_idle_hours`, the `idledevoice` sweep takes
+   the voice back.
+
+Registered regulars are skipped completely — the bot never touches voice they already
+have. Service bots and ops are skipped too. Anyone already voiced when the script
+loads gets their clock started on the first sweep rather than being devoiced.
+
+Don't want the devoicing? `!disable idledevoice` — auto-voicing keeps working.
+
+---
+
+## Requirements
+
+- eggdrop 1.8 or newer (tested on 1.10.1)
+- Tcl 8.5 or newer
+- The bot needs op in the channels it manages
+
+---
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE).
