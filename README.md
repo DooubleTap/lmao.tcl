@@ -2,7 +2,7 @@
 
 **Channel management for eggdrop, built for UnderNet.**
 
-[![Version](https://img.shields.io/badge/version-6.2.0-blue.svg)](https://github.com/DooubleTap/lmao.tcl)
+[![Version](https://img.shields.io/badge/version-6.4.0-blue.svg)](https://github.com/DooubleTap/lmao.tcl)
 [![Eggdrop](https://img.shields.io/badge/eggdrop-1.8%2B-green.svg)](https://www.eggheads.org/)
 [![Tcl](https://img.shields.io/badge/tcl-8.5%2B-orange.svg)](https://www.tcl.tk/)
 [![License](https://img.shields.io/badge/license-GPLv3-lightgrey.svg)](LICENSE)
@@ -17,7 +17,8 @@ bot never floods your channel.
 ## Highlights
 
 - **No channel spam.** Every command reply is a notice to the user who asked. The bot
-  only speaks in the channel when you explicitly tell it to (`!say`, `!act`, `!global`).
+  only speaks in the channel when you explicitly tell it to (`!say`, `!act`, `!global`)
+  — and in the ops channel, where the audit trail is a normal message everyone can read.
 - **One help table.** `!help` and `/msg <bot> help` share a single source of truth, so
   documentation can't drift away from the commands.
 - **Per-channel modules.** Turn features on and off per channel with `!enable` /
@@ -30,7 +31,10 @@ bot never floods your channel.
 - **ActiveVoice.** Voices people who actually talk, and takes it back when they go idle.
   Registered regulars (`+n`, `+m`, `+v`) are never touched.
 - **Flag protection.** `+n` and `+m` users and service bots (`X`, `W`) can't be
-  deopped, devoiced, kicked or banned by the bot.
+  deopped, devoiced, kicked or banned by the bot. A named exempt list covers the
+  people who run the channel even when they aren't in the userfile.
+- **No colour codes.** The bot never sends mIRC colours. Plain text reads the same
+  in every client and on every theme.
 - **UnderNet aware.** Written against ircu behaviour and the `X` service.
 
 ---
@@ -51,7 +55,7 @@ source scripts/lmao.tcl
 Then `.rehash` on the partyline. You should see:
 
 ```
-[lmao.tcl 6.2.0] - Complete production ready version
+[lmao.tcl 6.4.0] - Complete production ready version
 Loaded successfully - ready to serve!
 ```
 
@@ -74,6 +78,7 @@ Everything lives in the `CONFIGURATION SECTION` at the top of the script.
 | `cc(activevoice_exempt_flags)` | `n m v` | Flags that make a user invisible to ActiveVoice |
 | `cc(protected_bots)` | `X W` | Nicks the bot will never deop |
 | `cc(protected_flags)` | `n m` | Flags that protect a user from deop/devoice |
+| `cc(deop_exempt)` | `Secoupe Seb` | Nicks or handles the idle-deop sweep never touches |
 
 ---
 
@@ -110,7 +115,7 @@ The code has to be read out of a notice and typed back, which stops scripted bul
 registration. Nothing is written until it comes back, and every check runs a second time at
 that point — shares a channel, host unchanged, host not already owned, handle still free,
 code not expired. A new registration gets **no access flags**; ops grant those with
-`!chattr`.
+`!addvoice`, `!addmod` and friends — see [Access levels](#access-levels).
 
 Host-based identification is only as good as the host, so the bot says so every time:
 auth with X and set `+x` first, and it stores `<account>.users.undernet.org` — a host only
@@ -145,10 +150,68 @@ set cc(register_flags) ""       ;# flags a registration grants - leave empty
 Refused attempts are logged too — that is usually the part worth reading. Automatic voice
 and devoice are left out on purpose; they would bury everything else.
 
+The log goes out as an ordinary channel **message**, not a notice, so it lands in the
+ops channel window like anything else and scrolls back normally. No colour codes: the
+`[CATEGORY]` tag carries the meaning on its own.
+
 > **Note:** module states and chanlog destinations are held in memory. A `.rehash` or
 > `.restart` puts every module back to its default and every log back to `cc(backchan)`.
 
 ---
+
+## Access levels
+
+Access is a **position**, not a pile of flags. Every user sits on exactly one rung:
+
+| Level | Flag | What it gets |
+| --- | --- | --- |
+| Owner | `+n` | Everything. Granted on DCC with `.chattr`, never by command |
+| Master | `+m` | `!addop`, modes, blacklist, modules, chanlog, adduser/deluser |
+| Op | `+o` | Channel `+o`, plus everything a mod can do, plus topic |
+| Mod | `+M` | Kick, ban, unban, bans, invite, voice, devoice — **no channel `+o`** |
+| Voice | `+v` | Autovoice, and exemption from ActiveVoice's idle devoicer |
+
+`+M` is a custom flag, so it never collides with eggdrop's own `+m` (master).
+
+### Granting and removing
+
+| Command | Who can use it |
+| --- | --- |
+| `!addvoice <nick\|handle>` | Mod and up |
+| `!addmod <nick\|handle>` | Op and up |
+| `!addop <nick\|handle>` | Master and up |
+| `!addmaster <nick\|handle>` | Owner |
+| `!delvoice` / `!delmod` / `!delop` / `!delmaster` | Same as the matching `add` |
+| `!delaccess <nick\|handle>` | Op and up — removes whichever level they hold |
+| `!access [level]` | Mod and up — lists everyone with access here |
+
+### The hierarchy rules
+
+- **One level at a time.** Granting a level strips every other level first, globally and on
+  the channel, so `!addop` on someone who was only voiced *moves* them up. No leftover flags,
+  and no way for an old level to outlive the one that replaced it.
+- **Promote or demote with the same command.** `!addvoice` on an op moves them back down to
+  voice; the bot says which way it went.
+- **You can only reach below yourself.** You can never grant a level at or above your own,
+  never change someone standing level with you or above you, and never change your own access.
+- **`!delop` only removes ops.** Pointed at a master it tells you so instead of quietly
+  knocking them down — use `!delaccess` when you do not care which level it is.
+- **Unknown nicks are registered on the spot.** `!addvoice newbie` on someone with no record
+  creates one from the host the bot can see, and warns if it is an ISP host rather than a
+  hidden `*.users.undernet.org` one.
+
+Every grant, removal and refusal is written to the channel log and the bot's log.
+
+```
+<chanop> !addvoice dave
+-bot- [OK] dave is now Voice on #mainchan (flags: -|v)
+<chanop> !addmod dave
+-bot- [OK] dave moves up from Voice to Mod on #mainchan (flags: -|Mv)
+<chanop> !addop dave
+-bot- You have to be above Op yourself before you can give Op to anyone.
+<bigop> !addop dave
+-bot- [OK] dave moves up from Mod to Op on #mainchan (flags: -|ov)
+```
 
 ## Commands
 
@@ -174,7 +237,25 @@ gives you usage, description and an example.
 | `!whois <nick>` | A user's access level and flags |
 | `!ops <reason>` | Alert the ops in the back channel |
 
+### Mods — `+M`
+
+Kick and ban powers with no channel `+o`.
+
+| Command | Description |
+| --- | --- |
+| `!kick <nick> [reason]` | Kick |
+| `!ban <nick> [reason]` | Kick and ban (`*!*@host`) |
+| `!unban <mask>` | Remove a ban |
+| `!bans` | List the channel's bans |
+| `!invite <nick>` | Invite someone in |
+| `!voice [nick]` / `!devoice [nick]` | Give or take voice |
+| `!addvoice` / `!delvoice` | Grant or remove Voice |
+| `!access [level]` | Who has access here |
+
 ### Ops — `+o`
+
+Everything a mod can do, plus:
+
 
 | Command | Description |
 | --- | --- |
@@ -189,6 +270,8 @@ gives you usage, description and an example.
 | `!bans` | List the channel's bans |
 | `!topic <text>` | Set and store the topic |
 | `!topicsync` | Re-apply the stored topic |
+| `!addmod` / `!delmod` | Grant or remove Mod |
+| `!delaccess <handle>` | Remove whatever level someone holds |
 
 ### Masters — `+m`
 
@@ -197,7 +280,8 @@ gives you usage, description and an example.
 | `!mode <modes>` | Set channel modes |
 | `!blacklist <nick> [reason]` | Permanent ban |
 | `!whitelist <mask>` | Remove from the blacklist |
-| `!chattr <handle> <+\|-flags>` | Change a user's flags on this channel |
+| `!addop` / `!delop` | Grant or remove Op |
+| `!chattr <handle> <+\|-flags>` | Change a user's flags on this channel (raw, no hierarchy) |
 | `!adduser <handle> [mask]` | Add a user to the bot |
 | `!deluser <handle>` | Remove a user |
 | `!say <text>` | Speak in the channel |
@@ -218,6 +302,7 @@ gives you usage, description and an example.
 | `!rehash` / `!restart` | Reload scripts / restart the bot |
 | `!jump` | Jump to another server |
 | `!save` | Write the userfile and channel file |
+| `!addmaster` / `!delmaster` | Grant or remove Master |
 | `!chanset <+\|->setting` | Toggle `youtube`, `weather`, `needhelp`, `isup` |
 | `!uptime` | How long the bot has been up |
 
@@ -251,6 +336,32 @@ have. Service bots and ops are skipped too. Anyone already voiced when the scrip
 loads gets their clock started on the first sweep rather than being devoiced.
 
 Don't want the devoicing? `!disable idledevoice` — auto-voicing keeps working.
+
+---
+
+## How idle deop works
+
+`!idledeop #chan <hours>` sets the limit; the sweep runs every
+`idledeop_check_interval` seconds and takes `+o` back from anyone who has been silent
+past it. The bot has to be opped for any of it to happen.
+
+Four things are never deopped:
+
+- service bots in `cc(protected_bots)` — `X` and `W` by default
+- the bot itself
+- anyone carrying a flag from `cc(protected_flags)` — `+n` and `+m`
+- anyone named in `cc(deop_exempt)`
+
+```tcl
+set cc(deop_exempt) [list "Secoupe" "Seb"]
+```
+
+That last list matches on the **nick or the handle**, case-insensitively, and is
+checked before anything else. Use it for the people who run the channel: they op
+themselves deliberately and are meant to keep it, and it works whether or not the bot
+has a userfile record for them. Everyone else is fair game.
+
+Don't want it at all here? `!disable idledeop`.
 
 ---
 

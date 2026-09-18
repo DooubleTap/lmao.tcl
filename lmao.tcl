@@ -1,5 +1,6 @@
 # https://github.com/DooubleTap/lmao.tcl
-# Enhanced version 6.2 - COMPLETE with help system, topic system, module framework, and ActiveVoice
+# Enhanced version 6.4 - COMPLETE with help system, topic system, module framework,
+# ActiveVoice and the access level system (!addvoice !addmod !addop !addmaster)
 # For UnderNet ircu with proper flag protection
 
 ###########################################################################
@@ -28,8 +29,8 @@ set cc(activevoice_idle_hours) 3
 set cc(activevoice_check_interval) 300
 
 # Flags that make a user exempt from ActiveVoice. ActiveVoice is only for
-# non-regulars: anyone registered with +n, +m or +v keeps their own voice.
-set cc(activevoice_exempt_flags) [list n m v]
+# non-regulars: anyone registered with +n, +m, +M or +v keeps their own voice.
+set cc(activevoice_exempt_flags) [list n m M v]
 
 # Self-registration: /msg <bot> register
 # register_handle_max must not exceed the handlen setting in eggdrop.conf
@@ -40,7 +41,7 @@ set cc(register_handle_max) 9
 set cc(register_flags) ""
 
 # Version info
-set cc(version_number) "6.2.0"
+set cc(version_number) "6.4.0"
 set cc(version) "\002\[lmao.tcl $cc(version_number)\]\002"
 set cc(www) "https://github.com/DooubleTap/lmao.tcl"
 
@@ -96,8 +97,14 @@ proc toggle_module {chan module state} {
 # Service bots that should NEVER be deopped
 set cc(protected_bots) [list "X" "W"]
 
-# Flags that protect users from deop/devoice
+# Flags that protect users from deop/devoice. Mods (+M) are deliberately not
+# in here - a mod is an ordinary channel member as far as modes go.
 set cc(protected_flags) [list "n" "m"]
+
+# Nicks or handles the idle deop timer must never touch, whatever flags they
+# carry and however long they sit there. The people who actually run the
+# channel go in here - they op themselves on purpose and keep it.
+set cc(deop_exempt) [list "Secoupe" "Seb"]
 
 # Store idle deop settings per channel
 array set idledeop_config {}
@@ -112,36 +119,42 @@ array set activevoice_data {}
 # BIND DECLARATIONS
 ###########################################################################
 
+# A note on the flag masks below. "global|channel" is how eggdrop reads them,
+# and the two halves are checked separately: n|m lets through a global owner
+# or a channel master, but NOT someone carrying master globally and nothing on
+# the channel - which is how a command ends up silently doing nothing. Both
+# halves therefore carry the same letters everywhere.
+
 # Flag v - Voice/Devoice
-bind pub n|ov [string trim $cc(cmdchar)]voice pub_do_voice
-bind pub n|ov [string trim $cc(cmdchar)]devoice pub_do_devoice
+bind pub novM|novM [string trim $cc(cmdchar)]voice pub_do_voice
+bind pub novM|novM [string trim $cc(cmdchar)]devoice pub_do_devoice
 
 # Flag o - Operator commands
-bind pub n|o [string trim $cc(cmdchar)]invite pub_do_invite
-bind pub n|o [string trim $cc(cmdchar)]op pub_do_op
+bind pub noM|noM [string trim $cc(cmdchar)]invite pub_do_invite
+bind pub no|no [string trim $cc(cmdchar)]op pub_do_op
 bind msg - op pub_do_op:msg
 bind msg - [string trim $cc(cmdchar)]op pub_do_op:msg
-bind pub n|o [string trim $cc(cmdchar)]deop pub_do_deop
-bind pub n|o [string trim $cc(cmdchar)]topic topic:pub
-bind pub n|o [string trim $cc(cmdchar)]topicsync topic:sync
-bind pub n|o [string trim $cc(cmdchar)]kick pub_do_kick
-bind pub n|o [string trim $cc(cmdchar)]unban pub_do_unban
-bind pub n|o [string trim $cc(cmdchar)]bans pub_do_bans
-bind pub n|o [string trim $cc(cmdchar)]ban ban:pub
+bind pub no|no [string trim $cc(cmdchar)]deop pub_do_deop
+bind pub no|no [string trim $cc(cmdchar)]topic topic:pub
+bind pub no|no [string trim $cc(cmdchar)]topicsync topic:sync
+bind pub noM|noM [string trim $cc(cmdchar)]kick pub_do_kick
+bind pub noM|noM [string trim $cc(cmdchar)]unban pub_do_unban
+bind pub noM|noM [string trim $cc(cmdchar)]bans pub_do_bans
+bind pub noM|noM [string trim $cc(cmdchar)]ban ban:pub
 
 # Flag m - Master commands
-bind pub n|m [string trim $cc(cmdchar)]mode pub_do_mode
-bind pub n|m [string trim $cc(cmdchar)]whitelist pub_do_unperm
-bind pub n|m [string trim $cc(cmdchar)]blacklist pub_do_perm
-bind pub n|m [string trim $cc(cmdchar)]chattr chattr:pub
-bind pub n|m [string trim $cc(cmdchar)]act pub:act
-bind pub n|m [string trim $cc(cmdchar)]say pub:say
-bind pub n|m [string trim $cc(cmdchar)]idledeop idledeop:pub
-bind pub n|m [string trim $cc(cmdchar)]module module:pub
-bind pub n|m [string trim $cc(cmdchar)]modules module:pub
-bind pub n|m [string trim $cc(cmdchar)]enable module:enable:pub
-bind pub n|m [string trim $cc(cmdchar)]disable module:disable:pub
-bind pub n|m [string trim $cc(cmdchar)]chanlog chanlog:pub
+bind pub nm|nm [string trim $cc(cmdchar)]mode pub_do_mode
+bind pub nm|nm [string trim $cc(cmdchar)]whitelist pub_do_unperm
+bind pub nm|nm [string trim $cc(cmdchar)]blacklist pub_do_perm
+bind pub nm|nm [string trim $cc(cmdchar)]chattr chattr:pub
+bind pub nm|nm [string trim $cc(cmdchar)]act pub:act
+bind pub nm|nm [string trim $cc(cmdchar)]say pub:say
+bind pub nm|nm [string trim $cc(cmdchar)]idledeop idledeop:pub
+bind pub nm|nm [string trim $cc(cmdchar)]module module:pub
+bind pub nm|nm [string trim $cc(cmdchar)]modules module:pub
+bind pub nm|nm [string trim $cc(cmdchar)]enable module:enable:pub
+bind pub nm|nm [string trim $cc(cmdchar)]disable module:disable:pub
+bind pub nm|nm [string trim $cc(cmdchar)]chanlog chanlog:pub
 
 # Module control by /msg - access is checked inside the procs so channel-only
 # masters work too: /msg <bot> disable #chan idledevoice
@@ -169,8 +182,8 @@ bind pub n [string trim $cc(cmdchar)]part part:pub
 bind pub n [string trim $cc(cmdchar)]comeback comeback:pub
 bind pub n [string trim $cc(cmdchar)]join join:pub
 bind pub n [string trim $cc(cmdchar)]botnick botnick:pub
-bind pub n|m [string trim $cc(cmdchar)]adduser adduser:pub
-bind pub n|m [string trim $cc(cmdchar)]deluser deluser:pub
+bind pub nm|nm [string trim $cc(cmdchar)]adduser adduser:pub
+bind pub nm|nm [string trim $cc(cmdchar)]deluser deluser:pub
 bind pub n|- [string trim $cc(cmdchar)]chanset chanset:pub
 bind pub n|- [string trim $cc(cmdchar)]uptime uptime:pub
 
@@ -227,6 +240,27 @@ proc has_protected_flags {nick chan} {
 	return 0
 }
 
+# Is this nick, or the handle behind it, on the never-deop list?
+proc is_deop_exempt {nick chan} {
+	global cc
+
+	if {![info exists cc(deop_exempt)]} {
+		return 0
+	}
+
+	set hand [nick2hand $nick $chan]
+
+	foreach who $cc(deop_exempt) {
+		if {[string equal -nocase $nick $who]} {
+			return 1
+		}
+		if {$hand ne "" && $hand ne "*" && [string equal -nocase $hand $who]} {
+			return 1
+		}
+	}
+	return 0
+}
+
 # Check if nick is a protected bot
 proc is_protected_bot {nick} {
 	global cc
@@ -239,20 +273,16 @@ proc is_protected_bot {nick} {
 }
 
 # Get user's access level string
+# One answer, taken from the access level table further down, so !verify,
+# !whois and the access commands can never disagree about what somebody is.
 proc get_access_level {nick chan} {
-	set flags [chattr $nick $chan]
+	set row [access:by_rank [access:rank $nick $chan]]
 	
-	if {[string match "*n*" $flags]} {
-		return "Owner (n)"
-	} elseif {[string match "*m*" $flags]} {
-		return "Master (m)"
-	} elseif {[string match "*o*" $flags]} {
-		return "Op (o)"
-	} elseif {[string match "*v*" $flags]} {
-		return "Voice (v)"
-	} else {
+	if {$row eq ""} {
 		return "User (-)"
 	}
+	
+	return "[lindex $row 4] ([lindex $row 2])"
 }
 
 ###########################################################################
@@ -276,9 +306,9 @@ proc module:show {nick chan} {
 	puthelp "NOTICE $nick :\002Modules for $chan:\002"
 	foreach mod [lsort [array names module_defaults]] {
 		if {[module_enabled $chan $mod]} {
-			set state "\00303ON\003 "
+			set state "ON "
 		} else {
-			set state "\00304OFF\003"
+			set state "OFF"
 		}
 		if {[info exists module_desc($mod)]} {
 			set what " - $module_desc($mod)"
@@ -321,12 +351,12 @@ proc module:pub {nick uhost hand chan arg} {
 
 	if {$action eq "enable" || $action eq "on"} {
 		toggle_module $chan $module "on"
-		puthelp "NOTICE $nick :\00303\[OK\003\] Module $module is now ENABLED in $chan"
+		puthelp "NOTICE $nick :\[OK\] Module $module is now ENABLED in $chan"
 		putlog "$nick enabled module $module in $chan"
 		chanlog $chan "MODULE" "$nick enabled module \002$module\002"
 	} else {
 		toggle_module $chan $module "off"
-		puthelp "NOTICE $nick :\00304\[OK\003\] Module $module is now DISABLED in $chan"
+		puthelp "NOTICE $nick :\[OK\] Module $module is now DISABLED in $chan"
 		putlog "$nick disabled module $module in $chan"
 		chanlog $chan "MODULE" "$nick disabled module \002$module\002"
 	}
@@ -407,6 +437,16 @@ array set helpdb {
 	mode		{{%C%mode <channel modes>} {Sets channel modes (bot must be opped). Use + or - with mode letters} {%C%mode +nt} {}}
 	blacklist	{{%C%blacklist <nick> [reason]} {Permanently bans a user (mask: *!*@host) with optional reason} {%C%blacklist troll repeat offender} {}}
 	whitelist	{{%C%whitelist <*!*@host>} {Removes a user from the permanent blacklist} {%C%whitelist *!*@example.com} {}}
+	addvoice	{{%C%addvoice <nick|handle>} {Gives someone Voice level on this channel. A nick with no user record gets one made from the host they are on. Replaces any level they already had} {%C%addvoice john} {}}
+	addmod		{{%C%addmod <nick|handle>} {Gives someone Mod level (+M): kick, ban, unban, bans, invite, voice and devoice, but no channel +o. Op or above only} {%C%addmod john} {}}
+	addop		{{%C%addop <nick|handle>} {Gives someone Op level on this channel. Master or above only. Upgrades whatever level they had - a Voice or Mod becomes an Op, nothing is left behind} {%C%addop john} {}}
+	addmaster	{{%C%addmaster <nick|handle>} {Gives someone Master level on this channel. Owner only} {%C%addmaster john} {}}
+	delvoice	{{%C%delvoice <nick|handle>} {Takes Voice level away, leaving no access. Only works on someone whose level actually is Voice} {%C%delvoice john} {}}
+	delmod		{{%C%delmod <nick|handle>} {Takes Mod level away, leaving no access. Op or above only} {%C%delmod john} {}}
+	delop		{{%C%delop <nick|handle>} {Takes Op level away, leaving no access. Master or above only} {%C%delop john} {}}
+	delmaster	{{%C%delmaster <nick|handle>} {Takes Master level away, leaving no access. Owner only} {%C%delmaster john} {}}
+	delaccess	{{%C%delaccess <nick|handle>} {Removes whatever level someone holds, without having to know which one it is. The user record itself stays - use %C%deluser to remove that} {%C%delaccess john} {}}
+	access		{{%C%access [level]} {Lists everyone with a level on this channel, highest first. Add a level name to list just that one. Levels: voice, mod, op, master, owner} {%C%access mod} {}}
 	chattr		{{%C%chattr <handle> <+|-flags>} {Modifies a user's access flags on this channel (add with +, remove with -)} {%C%chattr john +o} {}}
 	adduser		{{%C%adduser <handle> [*!*@host]} {Adds a user to the bot. Without a hostmask the nick's current host is used} {%C%adduser john *!*@his.host.com} {}}
 	deluser		{{%C%deluser <handle>} {Removes a user from the bot completely} {%C%deluser john} {}}
@@ -461,6 +501,7 @@ proc help:send {nick text} {
 	if {$htext eq ""} {
 		puthelp "NOTICE $nick :\002Quick Help:\002 Type ${c}help <command> for details - (To prevent spam, you can use /msg $botnick help <command>)"
 		puthelp "NOTICE $nick :\002Common:\002 op deop voice devoice invite kick ban unban bans topic mode verify whois info ops"
+		puthelp "NOTICE $nick :\002Access:\002 ${c}access - ${c}addvoice ${c}addmod ${c}addop ${c}addmaster - ${c}delvoice ${c}delmod ${c}delop ${c}delmaster ${c}delaccess"
 		puthelp "NOTICE $nick :\002Modules:\002 ${c}module list - ${c}enable <module> - ${c}disable <module> (available: [help:modules])"
 		puthelp "NOTICE $nick :Or try ${c}showcommands for the full list"
 		return
@@ -588,17 +629,7 @@ proc chanlog {chan category text} {
 		return
 	}
 
-	switch -exact -- $category {
-		"SANCTION" { set colour "\00304" }
-		"DENIED"   { set colour "\00304" }
-		"ACCESS"   { set colour "\00312" }
-		"REGISTER" { set colour "\00307" }
-		"MODULE"   { set colour "\00303" }
-		"BOT"      { set colour "\00308" }
-		default    { set colour "\00314" }
-	}
-
-	puthelp "NOTICE $dest :${colour}\[$category\]\003 $where$text"
+	puthelp "PRIVMSG $dest :\[$category\] $where$text"
 }
 
 proc chanlog:pub {nick uhost hand chan arg} {
@@ -611,15 +642,15 @@ proc chanlog:pub {nick uhost hand chan arg} {
 	# --- no argument: report ---
 	if {$want eq ""} {
 		if {[module_enabled $chan "chanlog"]} {
-			set state "\00303ON\003"
+			set state "ON"
 		} else {
-			set state "\00304OFF\003"
+			set state "OFF"
 		}
 		set dest [chanlog:dest $chan]
 		if {$dest eq ""} {
 			set dest "\002nowhere\002 - set one with ${c}chanlog <#channel>"
 		} elseif {![botonchan $dest]} {
-			append dest " \00304(I am not on that channel)\003"
+			append dest " (I am not on that channel)"
 		}
 		puthelp "NOTICE $nick :Channel log for \002$chan\002 is \[$state\] and goes to $dest"
 		puthelp "NOTICE $nick :Change it with ${c}chanlog <#channel>, or ${c}chanlog off"
@@ -629,7 +660,7 @@ proc chanlog:pub {nick uhost hand chan arg} {
 	# --- off / on ---
 	if {[string equal -nocase $want "off"]} {
 		toggle_module $chan "chanlog" "off"
-		puthelp "NOTICE $nick :\00304\[OK\003\] Channel logging is now OFF for $chan"
+		puthelp "NOTICE $nick :\[OK\] Channel logging is now OFF for $chan"
 		putlog "$nick turned channel logging off for $chan"
 		chanlog "" "MODULE" "$nick turned channel logging \002off\002 for $chan"
 		return
@@ -642,7 +673,7 @@ proc chanlog:pub {nick uhost hand chan arg} {
 			return
 		}
 		toggle_module $chan "chanlog" "on"
-		puthelp "NOTICE $nick :\00303\[OK\003\] Channel logging is now ON for $chan, going to $dest"
+		puthelp "NOTICE $nick :\[OK\] Channel logging is now ON for $chan, going to $dest"
 		putlog "$nick turned channel logging on for $chan (to $dest)"
 		chanlog $chan "MODULE" "$nick turned channel logging \002on\002"
 		return
@@ -671,7 +702,7 @@ proc chanlog:pub {nick uhost hand chan arg} {
 	set chanlog_dest($key) $want
 	toggle_module $chan "chanlog" "on"
 
-	puthelp "NOTICE $nick :\00303\[OK\003\] $chan will now log to \002$want\002"
+	puthelp "NOTICE $nick :\[OK\] $chan will now log to \002$want\002"
 	putlog "$nick set the channel log for $chan to $want"
 	chanlog $chan "MODULE" "$nick set the channel log to \002$want\002"
 }
@@ -804,11 +835,11 @@ proc register:advice {nick host} {
 	global botnick
 
 	if {[register:hidden_host $host]} {
-		puthelp "NOTICE $nick :\00303Good:\003 your host is hidden by Undernet ($host). That host belongs to your X account, so nobody else can wear it."
+		puthelp "NOTICE $nick :Good: your host is hidden by Undernet ($host). That host belongs to your X account, so nobody else can wear it."
 		return
 	}
 
-	puthelp "NOTICE $nick :\00307Read this first:\003 your host is \002not\002 hidden. It is safer to auth with X and hide it \002before\002 registering:"
+	puthelp "NOTICE $nick :Read this first: your host is \002not\002 hidden. It is safer to auth with X and hide it \002before\002 registering:"
 	puthelp "NOTICE $nick :  1. /msg x@channels.undernet.org login \002<account> <password>\002   (only ever send that to x@channels.undernet.org)"
 	puthelp "NOTICE $nick :  2. /mode $nick +x     - your host becomes <account>.users.undernet.org"
 	puthelp "NOTICE $nick :  3. come back and register again"
@@ -975,7 +1006,7 @@ proc register:confirm {nick uhost hand token} {
 	unset register_pending($key)
 	save
 
-	puthelp "NOTICE $nick :\00303Registered.\003 Handle \002$handle\002, hostmask \002$mask\002, no access flags - a channel op grants those."
+	puthelp "NOTICE $nick :Registered. Handle \002$handle\002, hostmask \002$mask\002, no access flags - a channel op grants those."
 	puthelp "NOTICE $nick :Check it any time with /msg $botnick verify"
 
 	if {![register:hidden_host $now_host]} {
@@ -1129,8 +1160,8 @@ proc topic:sync {nick uhost hand chan arg} {
 ###########################################################################
 
 # Is this nick exempt from ActiveVoice? ActiveVoice exists to voice/devoice
-# NON-regulars: anyone who is a registered user carrying +n, +m or +v (global
-# or on this channel) manages their own voice and is left completely alone.
+# NON-regulars: anyone who is a registered user carrying +n, +m, +M or +v
+# (global or on this channel) manages their own voice and is left alone.
 proc activevoice:exempt {nick chan} {
 	global cc
 
@@ -1306,7 +1337,7 @@ proc ban:pub {nick uhost hand chan arg} {
 	putserv "KICK $chan $target :$reason"
 	
 	# Log to backchannel
-	putserv "PRIVMSG $cc(backchan) :\00304\[BAN\003\] $nick banned $target ($ban_mask) - Reason: $reason"
+	putserv "PRIVMSG $cc(backchan) :\[BAN\] $nick banned $target ($ban_mask) - Reason: $reason"
 	
 	putlog "$nick banned $target ($ban_mask) from $chan - Reason: $reason"
 	chanlog $chan "SANCTION" "$nick banned \002$target\002 ($ban_mask) - $reason"
@@ -1461,7 +1492,7 @@ proc idledeop:pub {nick uhost hand chan arg} {
 	set idledeop_config($target_chan) $hours
 	
 	putserv "NOTICE $nick :Idle deop set for $target_chan: $hours hours"
-	putserv "PRIVMSG $cc(backchan) :\00303\[IDLEDEOP\003\] $nick configured idle deop for $target_chan: $hours hours"
+	putserv "PRIVMSG $cc(backchan) :\[IDLEDEOP\] $nick configured idle deop for $target_chan: $hours hours"
 	putlog "$nick set idle deop for $target_chan to $hours hours"
 	chanlog $chan "MODULE" "$nick set idle deop for $target_chan to $hours hours"
 }
@@ -1507,6 +1538,11 @@ proc idledeop:timer {min hour day weekday year} {
 				continue
 			}
 			
+			# Never touch anyone on the never-deop list
+			if {[is_deop_exempt $user $chan]} {
+				continue
+			}
+
 			# Check if user has protected flags
 			set user_hand [nick2hand $user $chan]
 			if {$user_hand ne "*" && [has_protected_flags $user_hand $chan]} {
@@ -1871,7 +1907,7 @@ proc chanset:pub {nick uhost hand chan arg} {
 	
 	if {[regexp {^[+-](youtube|weather|needhelp|isup)$} $mode]} {
 		channel set $chan $mode
-		putserv "NOTICE $nick :Set mode on $chan: \00312$mode\003"
+		putserv "NOTICE $nick :Set mode on $chan: $mode"
 	} else {
 		putserv "NOTICE $nick :\002USAGE\002 - [string trim $cc(cmdchar)]chanset <+|->setting"
 	}
@@ -2041,6 +2077,443 @@ proc deluser:pub {nick uhost handle chan arg} {
 	chanlog $chan "ACCESS" "$nick deleted user \002$user\002"
 }
 
+###########################################################################
+# USER MANAGEMENT - ACCESS LEVELS WITH HIERARCHY
+#
+# !addvoice !addmod !addop !addmaster and the matching !del... commands.
+#
+# A level is a position, not a pile of flags. Granting one takes every other
+# level off the user first, so !addop on someone who was only voiced moves
+# them up instead of leaving both behind, and !addvoice on an op moves them
+# back down. Only the level actually held counts.
+#
+# Mod (+M) is a custom flag: kick and ban powers with no channel +o.
+###########################################################################
+
+# The single table everything below reads:
+#   rank  name  marker  flags granted  label
+# The marker identifies the level. The granted flags include the levels
+# underneath, so an op keeps his autovoice if someone takes the op away.
+set cc(levels) [list \
+	[list 1 voice  v v   "Voice"] \
+	[list 2 mod    M Mv  "Mod"] \
+	[list 3 op     o ov  "Op"] \
+	[list 4 master m mov "Master"] \
+	[list 5 owner  n n   "Owner"] \
+]
+
+# Levels that can be handed out by command. Owner is recognised and
+# protected but never granted this way - that stays a .chattr job on DCC.
+set cc(grantable) [list voice mod op master]
+
+# {rank name marker flags label} for a level name, "" if there is no such level
+proc access:by_name {name} {
+	global cc
+	foreach row $cc(levels) {
+		if {[lindex $row 1] eq $name} {
+			return $row
+		}
+	}
+	return ""
+}
+
+# The same row, looked up by rank
+proc access:by_rank {rank} {
+	global cc
+	foreach row $cc(levels) {
+		if {[lindex $row 0] == $rank} {
+			return $row
+		}
+	}
+	return ""
+}
+
+# "voice, mod, op, master, owner" - for usage messages
+proc access:names {} {
+	global cc
+	set names [list]
+	foreach row $cc(levels) {
+		lappend names [lindex $row 1]
+	}
+	return [join $names ", "]
+}
+
+# Every marker flag in one string - what gets stripped before a level is set
+proc access:all_markers {} {
+	global cc
+	set markers ""
+	foreach row $cc(levels) {
+		append markers [lindex $row 2]
+	}
+	return $markers
+}
+
+# Rank a handle holds on a channel, 0 when it holds none. Global and channel
+# flags both count and the highest one wins, so a global master outranks a
+# channel op the same way the rest of the script already treats him.
+proc access:rank {handle chan} {
+	global cc
+
+	if {$handle eq "" || $handle eq "*" || ![validuser $handle]} {
+		return 0
+	}
+
+	set flags [chattr $handle $chan]
+	set best 0
+	foreach row $cc(levels) {
+		if {[string first [lindex $row 2] $flags] != -1 && [lindex $row 0] > $best} {
+			set best [lindex $row 0]
+		}
+	}
+	return $best
+}
+
+# "Op" / "Mod" / "None"
+proc access:label {rank} {
+	set row [access:by_rank $rank]
+	if {$row eq ""} {
+		return "None"
+	}
+	return [lindex $row 4]
+}
+
+# Move a handle to a level (0 removes all access). Every level flag comes off
+# first, globally as well as on the channel, so a leftover global +o can never
+# outlive the channel level it was meant to replace.
+proc access:apply {handle chan rank} {
+	set strip [access:all_markers]
+
+	chattr $handle -$strip
+	chattr $handle |-$strip $chan
+
+	if {$rank > 0} {
+		set row [access:by_rank $rank]
+		chattr $handle |+[lindex $row 3] $chan
+	}
+}
+
+# Turn what somebody typed into a handle.
+#   - an existing handle is used as it stands
+#   - a nick on the channel is resolved to the handle behind it
+#   - a nick with no record is registered on the spot from the host he is
+#     wearing right now, which is what makes !addvoice a one step command
+# Returns the handle, or "" after explaining the problem to $nick.
+proc access:handle {nick chan target {create 0}} {
+	global cc
+
+	if {[validuser $target]} {
+		return $target
+	}
+
+	if {![onchan $target $chan]} {
+		puthelp "NOTICE $nick :\002$target\002 is not a handle I know and is not on $chan - add the record first with [string trim $cc(cmdchar)]adduser"
+		return ""
+	}
+
+	set hand [nick2hand $target $chan]
+	if {$hand ne "" && $hand ne "*" && [validuser $hand]} {
+		return $hand
+	}
+
+	if {!$create} {
+		puthelp "NOTICE $nick :\002$target\002 is not registered with me, so there is no access to take away."
+		return ""
+	}
+
+	# No record yet - build one from the host the bot can actually see
+	if {![register:valid_handle $target]} {
+		puthelp "NOTICE $nick :\002$target\002 will not do as a handle - add the user yourself with [string trim $cc(cmdchar)]adduser <handle> <*!*@host> first"
+		return ""
+	}
+
+	set host [register:host_of $target $chan]
+	if {$host eq ""} {
+		puthelp "NOTICE $nick :I cannot read $target's host right now. Try again in a moment."
+		return ""
+	}
+
+	set mask "*!*@$host"
+	adduser $target $mask
+
+	if {![validuser $target]} {
+		puthelp "NOTICE $nick :Something went wrong writing a record for \002$target\002."
+		putlog "ACCESS: failed to add user $target ($mask)"
+		return ""
+	}
+
+	puthelp "NOTICE $nick :\002$target\002 had no record, so I made one: handle \002$target\002, hostmask \002$mask\002"
+	if {![register:hidden_host $host]} {
+		puthelp "NOTICE $nick :Note: that is an ISP host, not a hidden one. When their IP changes they lose access and the next person on that IP inherits it."
+	}
+	putlog "ACCESS: $nick had me add user $target ($mask)"
+	chanlog $chan "ACCESS" "$nick added user \002$target\002 ($mask)"
+
+	return $target
+}
+
+# Tell the user himself what changed, if he is around to hear it
+proc access:tell {handle chan text} {
+	set target [hand2nick $handle $chan]
+	if {$target ne "" && $target ne "*"} {
+		puthelp "NOTICE $target :$text"
+	}
+}
+
+# The rank of the person giving the order, or -1 when the bot has no record
+# for him at all. Kept here so every command answers that the same way.
+proc access:caller_rank {nick hand chan} {
+	if {$hand eq "" || $hand eq "*" || ![validuser $hand]} {
+		puthelp "NOTICE $nick :I have no user record for you, so I cannot check your access."
+		return -1
+	}
+	return [access:rank $hand $chan]
+}
+
+# !addvoice / !addmod / !addop / !addmaster all land here
+proc access:add {nick hand chan arg level} {
+	global cc
+
+	set c [string trim $cc(cmdchar)]
+	set row [access:by_name $level]
+	foreach {rank lname marker fset label} $row break
+
+	set target [lindex [split $arg] 0]
+	if {$target eq ""} {
+		puthelp "NOTICE $nick :Usage: ${c}add$level <nick|handle>"
+		return
+	}
+
+	set my_rank [access:caller_rank $nick $hand $chan]
+	if {$my_rank < 0} {
+		return
+	}
+
+	# You can only hand out a level below your own
+	if {$my_rank <= $rank} {
+		puthelp "NOTICE $nick :You have to be above \002$label\002 yourself before you can give \002$label\002 to anyone."
+		chanlog $chan "DENIED" "$nick tried to give \002$label\002 to \002$target\002"
+		return
+	}
+
+	set target_hand [access:handle $nick $chan $target 1]
+	if {$target_hand eq ""} {
+		return
+	}
+
+	if {[string equal -nocase $target_hand $hand]} {
+		puthelp "NOTICE $nick :You cannot change your own access."
+		return
+	}
+
+	set old_rank [access:rank $target_hand $chan]
+
+	# Never touch somebody standing level with you or above you
+	if {$old_rank >= $my_rank} {
+		puthelp "NOTICE $nick :\002$target_hand\002 is \002[access:label $old_rank]\002 - that is not below your own level, so I left it alone."
+		chanlog $chan "DENIED" "$nick tried to set \002$target_hand\002 ([access:label $old_rank]) to \002$label\002"
+		return
+	}
+
+	if {$old_rank == $rank} {
+		puthelp "NOTICE $nick :\002$target_hand\002 is already \002$label\002 on $chan."
+		return
+	}
+
+	access:apply $target_hand $chan $rank
+	save
+
+	if {$old_rank == 0} {
+		set what "is now \002$label\002"
+		set logged "gave \002$label\002 to"
+	} elseif {$old_rank < $rank} {
+		set what "moves up from \002[access:label $old_rank]\002 to \002$label\002"
+		set logged "promoted \002[access:label $old_rank]\002 -> \002$label\002 for"
+	} else {
+		set what "moves down from \002[access:label $old_rank]\002 to \002$label\002"
+		set logged "demoted \002[access:label $old_rank]\002 -> \002$label\002 for"
+	}
+
+	puthelp "NOTICE $nick :\[OK\] \002$target_hand\002 $what on $chan (flags: [chattr $target_hand $chan])"
+	access:tell $target_hand $chan "Your access on $chan $what - set by $nick. Check it any time with ${c}verify"
+
+	putlog "ACCESS: $nick set $target_hand to $label on $chan (was [access:label $old_rank])"
+	chanlog $chan "ACCESS" "$nick $logged \002$target_hand\002"
+}
+
+# !delvoice / !delmod / !delop / !delmaster, and !delaccess for whatever
+# level the user happens to hold. Level "" means "remove what they have".
+proc access:del {nick hand chan arg level} {
+	global cc
+
+	set c [string trim $cc(cmdchar)]
+
+	if {$level eq ""} {
+		set rank 0
+		set label "access"
+		set command "delaccess"
+	} else {
+		set row [access:by_name $level]
+		foreach {rank lname marker fset label} $row break
+		set command "del$level"
+	}
+
+	set target [lindex [split $arg] 0]
+	if {$target eq ""} {
+		puthelp "NOTICE $nick :Usage: ${c}$command <nick|handle>"
+		return
+	}
+
+	set my_rank [access:caller_rank $nick $hand $chan]
+	if {$my_rank < 0} {
+		return
+	}
+
+	if {$level ne "" && $my_rank <= $rank} {
+		puthelp "NOTICE $nick :You have to be above \002$label\002 yourself before you can take \002$label\002 away."
+		chanlog $chan "DENIED" "$nick tried to take \002$label\002 from \002$target\002"
+		return
+	}
+
+	set target_hand [access:handle $nick $chan $target 0]
+	if {$target_hand eq ""} {
+		return
+	}
+
+	if {[string equal -nocase $target_hand $hand]} {
+		puthelp "NOTICE $nick :You cannot change your own access."
+		return
+	}
+
+	set old_rank [access:rank $target_hand $chan]
+
+	if {$old_rank == 0} {
+		puthelp "NOTICE $nick :\002$target_hand\002 has no access on $chan."
+		return
+	}
+
+	if {$old_rank >= $my_rank} {
+		puthelp "NOTICE $nick :\002$target_hand\002 is \002[access:label $old_rank]\002 - that is not below your own level, so I left it alone."
+		chanlog $chan "DENIED" "$nick tried to remove access from \002$target_hand\002 ([access:label $old_rank])"
+		return
+	}
+
+	# A level command only removes that exact level. Somebody who has been
+	# moved up since is left alone rather than quietly knocked all the way
+	# down by a stale !delvoice.
+	if {$level ne "" && $old_rank != $rank} {
+		set other [access:by_rank $old_rank]
+		puthelp "NOTICE $nick :\002$target_hand\002 is \002[access:label $old_rank]\002, not \002$label\002 - use ${c}del[lindex $other 1] or ${c}delaccess"
+		return
+	}
+
+	set had [access:label $old_rank]
+	access:apply $target_hand $chan 0
+	save
+
+	puthelp "NOTICE $nick :\[OK\] \002$target_hand\002 is no longer \002$had\002 on $chan - no access left (flags: [chattr $target_hand $chan])"
+	access:tell $target_hand $chan "Your \002$had\002 access on $chan was removed by $nick."
+
+	putlog "ACCESS: $nick removed $had from $target_hand on $chan"
+	chanlog $chan "ACCESS" "$nick removed \002$had\002 from \002$target_hand\002"
+}
+
+# !access [level] - everybody the bot knows with a level on this channel
+proc access:list {nick chan arg} {
+	global cc
+
+	set c [string trim $cc(cmdchar)]
+	set only [string tolower [lindex [split $arg] 0]]
+
+	if {$only ne "" && [access:by_name $only] eq ""} {
+		puthelp "NOTICE $nick :Unknown level: $only - pick one of: [access:names]"
+		return
+	}
+
+	# Collected per rank so the list comes out top down
+	foreach row $cc(levels) {
+		set found([lindex $row 0]) [list]
+	}
+
+	set total 0
+	foreach handle [userlist] {
+		set rank [access:rank $handle $chan]
+		if {$rank == 0} {
+			continue
+		}
+		if {$only ne "" && [lindex [access:by_name $only] 0] != $rank} {
+			continue
+		}
+		lappend found($rank) $handle
+		incr total
+	}
+
+	if {$total == 0} {
+		if {$only ne ""} {
+			puthelp "NOTICE $nick :Nobody holds \002$only\002 on $chan."
+		} else {
+			puthelp "NOTICE $nick :Nobody has access on $chan yet."
+		}
+		return
+	}
+
+	puthelp "NOTICE $nick :\002Access list for $chan\002 - $total with access:"
+
+	foreach row [lsort -integer -decreasing -index 0 $cc(levels)] {
+		set rank [lindex $row 0]
+		if {![llength $found($rank)]} {
+			continue
+		}
+		set line ""
+		foreach handle [lsort $found($rank)] {
+			if {[hand2nick $handle $chan] ne ""} {
+				append line "$handle\[*\] "
+			} else {
+				append line "$handle "
+			}
+			if {[string length $line] > 300} {
+				puthelp "NOTICE $nick :  \002[lindex $row 4]\002 ([lindex $row 2]): [string trimright $line]"
+				set line ""
+			}
+		}
+		if {$line ne ""} {
+			puthelp "NOTICE $nick :  \002[lindex $row 4]\002 ([lindex $row 2]): [string trimright $line]"
+		}
+	}
+
+	puthelp "NOTICE $nick :\[*\] = on the channel right now. ${c}verify <nick> shows one user in full."
+}
+
+###########################################################################
+# USER MANAGEMENT - COMMANDS
+###########################################################################
+
+proc addvoice:pub {nick uhost hand chan arg}  { access:add $nick $hand $chan $arg voice }
+proc addmod:pub {nick uhost hand chan arg}    { access:add $nick $hand $chan $arg mod }
+proc addop:pub {nick uhost hand chan arg}     { access:add $nick $hand $chan $arg op }
+proc addmaster:pub {nick uhost hand chan arg} { access:add $nick $hand $chan $arg master }
+
+proc delvoice:pub {nick uhost hand chan arg}  { access:del $nick $hand $chan $arg voice }
+proc delmod:pub {nick uhost hand chan arg}    { access:del $nick $hand $chan $arg mod }
+proc delop:pub {nick uhost hand chan arg}     { access:del $nick $hand $chan $arg op }
+proc delmaster:pub {nick uhost hand chan arg} { access:del $nick $hand $chan $arg master }
+
+proc delaccess:pub {nick uhost hand chan arg} { access:del $nick $hand $chan $arg "" }
+
+proc access:pub {nick uhost hand chan arg} { access:list $nick $chan $arg }
+
+# The binds only let through people who could possibly pass the rank check
+# inside the proc - the rank check itself is what actually decides.
+bind pub nmMo|nmMo [string trim $cc(cmdchar)]addvoice addvoice:pub
+bind pub nmMo|nmMo [string trim $cc(cmdchar)]delvoice delvoice:pub
+bind pub nmo|nmo [string trim $cc(cmdchar)]addmod addmod:pub
+bind pub nmo|nmo [string trim $cc(cmdchar)]delmod delmod:pub
+bind pub nm|nm [string trim $cc(cmdchar)]addop addop:pub
+bind pub nm|nm [string trim $cc(cmdchar)]delop delop:pub
+bind pub n|n [string trim $cc(cmdchar)]addmaster addmaster:pub
+bind pub n|n [string trim $cc(cmdchar)]delmaster delmaster:pub
+bind pub nmo|nmo [string trim $cc(cmdchar)]delaccess delaccess:pub
+bind pub nmMo|nmMo [string trim $cc(cmdchar)]access access:pub
+
 proc pub_whois {nick uhost handle chan text} {
 	global cc
 	
@@ -2070,7 +2543,7 @@ proc pub_version {nick uhost handle chan arg} {
 
 proc pub:alert {nick uhost handle chan arg} {
 	global cc
-	puthelp "NOTICE $cc(backchan) :\00304\[OPS\003\] $nick calling ops in $chan: $arg"
+	puthelp "PRIVMSG $cc(backchan) :\[OPS\] $nick calling ops in $chan: $arg"
 }
 
 proc pub_info {nick uhost handle chan arg} {
