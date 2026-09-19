@@ -141,6 +141,8 @@ bind pub noM|noM [string trim $cc(cmdchar)]kick pub_do_kick
 bind pub noM|noM [string trim $cc(cmdchar)]unban pub_do_unban
 bind pub noM|noM [string trim $cc(cmdchar)]bans pub_do_bans
 bind pub noM|noM [string trim $cc(cmdchar)]ban ban:pub
+bind msg - ban ban:msg
+bind msg - [string trim $cc(cmdchar)]ban ban:msg
 
 # Flag m - Master commands
 bind pub nm|nm [string trim $cc(cmdchar)]mode pub_do_mode
@@ -1341,6 +1343,32 @@ proc ban:pub {nick uhost hand chan arg} {
 	
 	putlog "$nick banned $target ($ban_mask) from $chan - Reason: $reason"
 	chanlog $chan "SANCTION" "$nick banned \002$target\002 ($ban_mask) - $reason"
+}
+
+proc ban:msg {nick host handle text} {
+	global botnick
+
+	set parts [split [string trim $text]]
+	set chan [lindex $parts 0]
+	set rest [join [lrange $parts 1 end]]
+
+	if {![string match "#*" $chan]} {
+		puthelp "NOTICE $nick :Usage: /msg $botnick ban <#channel> <nick> \[reason\]"
+		return
+	}
+
+	if {![validchan $chan]} {
+		puthelp "NOTICE $nick :I am not on $chan"
+		return
+	}
+
+	if {![matchattr $handle n] && ![matchattr $handle noM|noM $chan]} {
+		puthelp "NOTICE $nick :You do not have ban access on $chan"
+		chanlog $chan "DENIED" "$nick tried to ban by /msg"
+		return
+	}
+
+	ban:pub $nick $host $handle $chan $rest
 }
 
 ###########################################################################
