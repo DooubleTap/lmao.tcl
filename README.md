@@ -2,7 +2,7 @@
 
 **Channel management for eggdrop, built for UnderNet.**
 
-[![Version](https://img.shields.io/badge/version-6.4.0-blue.svg)](https://github.com/DooubleTap/lmao.tcl)
+[![Version](https://img.shields.io/badge/version-6.5.0-blue.svg)](https://github.com/DooubleTap/lmao.tcl)
 [![Eggdrop](https://img.shields.io/badge/eggdrop-1.8%2B-green.svg)](https://www.eggheads.org/)
 [![Tcl](https://img.shields.io/badge/tcl-8.5%2B-orange.svg)](https://www.tcl.tk/)
 [![License](https://img.shields.io/badge/license-GPLv3-lightgrey.svg)](LICENSE)
@@ -55,7 +55,7 @@ source scripts/lmao.tcl
 Then `.rehash` on the partyline. You should see:
 
 ```
-[lmao.tcl 6.4.0] - Complete production ready version
+[lmao.tcl 6.5.0] - Complete production ready version
 Loaded successfully - ready to serve!
 ```
 

@@ -1,5 +1,5 @@
 # https://github.com/DooubleTap/lmao.tcl
-# Enhanced version 6.4 - COMPLETE with help system, topic system, module framework,
+# Enhanced version 6.5 - COMPLETE with help system, topic system, module framework,
 # ActiveVoice and the access level system (!addvoice !addmod !addop !addmaster)
 # For UnderNet ircu with proper flag protection
 
@@ -41,7 +41,7 @@ set cc(register_handle_max) 9
 set cc(register_flags) ""
 
 # Version info
-set cc(version_number) "6.4.0"
+set cc(version_number) "6.5.0"
 set cc(version) "\002\[lmao.tcl $cc(version_number)\]\002"
 set cc(www) "https://github.com/DooubleTap/lmao.tcl"
 
@@ -125,16 +125,22 @@ array set activevoice_data {}
 # the channel - which is how a command ends up silently doing nothing. Both
 # halves therefore carry the same letters everywhere.
 
-# Flag v - Voice/Devoice
-bind pub novM|novM [string trim $cc(cmdchar)]voice pub_do_voice
-bind pub novM|novM [string trim $cc(cmdchar)]devoice pub_do_devoice
+# Channel mode commands - !op !deop !voice !devoice
+#
+# These four are bound open on purpose and check the access level themselves,
+# in access:require. A flag mask that does not match makes eggdrop drop the
+# command on the floor without a word, which is exactly what people report as
+# "I typed !op and nothing happened". Deciding it inside the proc means there
+# is always an answer.
+bind pub - [string trim $cc(cmdchar)]voice pub_do_voice
+bind pub - [string trim $cc(cmdchar)]devoice pub_do_devoice
+bind pub - [string trim $cc(cmdchar)]op pub_do_op
+bind pub - [string trim $cc(cmdchar)]deop pub_do_deop
 
 # Flag o - Operator commands
 bind pub noM|noM [string trim $cc(cmdchar)]invite pub_do_invite
-bind pub no|no [string trim $cc(cmdchar)]op pub_do_op
 bind msg - op pub_do_op:msg
 bind msg - [string trim $cc(cmdchar)]op pub_do_op:msg
-bind pub no|no [string trim $cc(cmdchar)]deop pub_do_deop
 bind pub no|no [string trim $cc(cmdchar)]topic topic:pub
 bind pub no|no [string trim $cc(cmdchar)]topicsync topic:sync
 bind pub noM|noM [string trim $cc(cmdchar)]kick pub_do_kick
@@ -425,10 +431,10 @@ proc module:disable:msg {nick uhost hand text} {
 array set helpdb {
 	help		{{%C%help [command]} {Shows command help. Replies always come to you by notice, never to the channel} {%C%help ban} {/msg %B% help ban}}
 	showcommands	{{%C%showcommands} {Lists every command name the bot knows} {%C%showcommands} {/msg %B% showcommands}}
-	op		{{%C%op [nick]} {Gives op (+o) to yourself or someone specified} {%C%op nickname} {/msg %B% op #chan nickname}}
-	deop		{{%C%deop [nick]} {Removes op (+o) from a user (cannot deop +n/+m flagged users or service bots)} {%C%deop nickname} {}}
-	voice		{{%C%voice [nick]} {Gives voice (+v) to yourself or someone specified} {%C%voice nickname} {}}
-	devoice		{{%C%devoice [nick]} {Removes voice (+v) from a user (cannot devoice +n/+m flagged users)} {%C%devoice nickname} {}}
+	op		{{%C%op [nick]} {Gives op (+o) to yourself or someone specified. Needs Op level or above in the user list} {%C%op nickname} {/msg %B% op #chan nickname}}
+	deop		{{%C%deop [nick]} {Removes op (+o) from a user (cannot deop +n/+m flagged users or service bots). Needs Op level or above} {%C%deop nickname} {}}
+	voice		{{%C%voice [nick]} {Gives voice (+v) to yourself or someone specified. Needs Voice level or above} {%C%voice nickname} {}}
+	devoice		{{%C%devoice [nick]} {Removes voice (+v) from a user (cannot devoice +n/+m flagged users). Needs Voice level or above} {%C%devoice nickname} {}}
 	invite		{{%C%invite <nick>} {Invites a user to the channel (bot must be opped)} {%C%invite someuser} {}}
 	kick		{{%C%kick <nick> [reason]} {Kicks a user from the channel with optional reason} {%C%kick spammer spam detected} {}}
 	ban		{{%C%ban <nick> [reason]} {Bans and kicks a user (mask: *!*@host). Protects +n/+m flags and service bots} {%C%ban baduser being annoying} {}}
@@ -439,15 +445,15 @@ array set helpdb {
 	mode		{{%C%mode <channel modes>} {Sets channel modes (bot must be opped). Use + or - with mode letters} {%C%mode +nt} {}}
 	blacklist	{{%C%blacklist <nick> [reason]} {Permanently bans a user (mask: *!*@host) with optional reason} {%C%blacklist troll repeat offender} {}}
 	whitelist	{{%C%whitelist <*!*@host>} {Removes a user from the permanent blacklist} {%C%whitelist *!*@example.com} {}}
-	addvoice	{{%C%addvoice <nick|handle>} {Gives someone Voice level on this channel. A nick with no user record gets one made from the host they are on. Replaces any level they already had} {%C%addvoice john} {}}
-	addmod		{{%C%addmod <nick|handle>} {Gives someone Mod level (+M): kick, ban, unban, bans, invite, voice and devoice, but no channel +o. Op or above only} {%C%addmod john} {}}
-	addop		{{%C%addop <nick|handle>} {Gives someone Op level on this channel. Master or above only. Upgrades whatever level they had - a Voice or Mod becomes an Op, nothing is left behind} {%C%addop john} {}}
-	addmaster	{{%C%addmaster <nick|handle>} {Gives someone Master level on this channel. Owner only} {%C%addmaster john} {}}
-	delvoice	{{%C%delvoice <nick|handle>} {Takes Voice level away, leaving no access. Only works on someone whose level actually is Voice} {%C%delvoice john} {}}
-	delmod		{{%C%delmod <nick|handle>} {Takes Mod level away, leaving no access. Op or above only} {%C%delmod john} {}}
-	delop		{{%C%delop <nick|handle>} {Takes Op level away, leaving no access. Master or above only} {%C%delop john} {}}
-	delmaster	{{%C%delmaster <nick|handle>} {Takes Master level away, leaving no access. Owner only} {%C%delmaster john} {}}
-	delaccess	{{%C%delaccess <nick|handle>} {Removes whatever level someone holds, without having to know which one it is. The user record itself stays - use %C%deluser to remove that} {%C%delaccess john} {}}
+	addvoice	{{%C%addvoice <nick|handle>} {Gives someone Voice level on this channel and sets +v on them if they are here. A nick with no user record gets one made from the host they are on. Replaces any level they already had} {%C%addvoice john} {}}
+	addmod		{{%C%addmod <nick|handle>} {Gives someone Mod level (+M): kick, ban, unban, bans, invite, voice and devoice, but no channel +o. Sets +v on them and takes +o off if they had it. Op or above only} {%C%addmod john} {}}
+	addop		{{%C%addop <nick|handle>} {Gives someone Op level on this channel and ops them (+o) if they are here. Master or above only. Upgrades whatever level they had - a Voice or Mod becomes an Op, nothing is left behind} {%C%addop john} {}}
+	addmaster	{{%C%addmaster <nick|handle>} {Gives someone Master level on this channel and ops them (+o) if they are here. Owner only} {%C%addmaster john} {}}
+	delvoice	{{%C%delvoice <nick|handle>} {Takes Voice level away, leaving no access, and removes +v in the channel. Only works on someone whose level actually is Voice} {%C%delvoice john} {}}
+	delmod		{{%C%delmod <nick|handle>} {Takes Mod level away, leaving no access, and removes +v in the channel. Op or above only} {%C%delmod john} {}}
+	delop		{{%C%delop <nick|handle>} {Takes Op level away, leaving no access, and removes +o in the channel. Master or above only} {%C%delop john} {}}
+	delmaster	{{%C%delmaster <nick|handle>} {Takes Master level away, leaving no access, and removes +o in the channel. Owner only} {%C%delmaster john} {}}
+	delaccess	{{%C%delaccess <nick|handle>} {Removes whatever level someone holds, without having to know which one it is, and takes +o/+v off them in the channel. The user record itself stays - use %C%deluser to remove that} {%C%delaccess john} {}}
 	access		{{%C%access [level]} {Lists everyone with a level on this channel, highest first. Add a level name to list just that one. Levels: voice, mod, op, master, owner} {%C%access mod} {}}
 	chattr		{{%C%chattr <handle> <+|-flags>} {Modifies a user's access flags on this channel (add with +, remove with -)} {%C%chattr john +o} {}}
 	adduser		{{%C%adduser <handle> [*!*@host]} {Adds a user to the bot. Without a hostmask the nick's current host is used} {%C%adduser john *!*@his.host.com} {}}
@@ -1377,46 +1383,61 @@ proc ban:msg {nick host handle text} {
 
 proc pub_do_deop {nick host handle channel args} {
 	global botnick cc
-	
-	set who [lindex $args 0]
-	
-	if {$who eq ""} {
-		putserv "MODE $channel -o $nick"
+
+	if {![access:require $nick $handle $channel [access:rank_of op] "deop anyone"]} {
 		return
 	}
-	
+
+	set who [mode:target $args $nick]
+
+	if {![botisop $channel]} {
+		putserv "NOTICE $nick :I am not op on $channel!"
+		return
+	}
+
+	# Self-deop comes before the protections - a master taking his own op
+	# off is not an attack on himself, so he must not be kicked for it.
+	if {[string equal -nocase $who $nick]} {
+		if {![isop $nick $channel]} {
+			putserv "NOTICE $nick :You are not op'd on $channel"
+			return
+		}
+		putserv "MODE $channel -o $nick"
+		putlog "$nick deopped himself in $channel"
+		return
+	}
+
 	# Protect service bots
 	if {[is_protected_bot $who]} {
 		putserv "NOTICE $nick :Cannot deop protected service bot $who"
 		return
 	}
-	
+
 	# Protect the bot itself
-	if {[string tolower $who] eq [string tolower $botnick]} {
+	if {[string equal -nocase $who $botnick]} {
 		putserv "NOTICE $nick :I won't deop myself"
 		return
 	}
-	
+
+	if {![onchan $who $channel]} {
+		putserv "NOTICE $nick :$who is not on $channel"
+		return
+	}
+
 	# Protect users with protected flags
 	set target_hand [nick2hand $who $channel]
-	if {$target_hand ne "*" && [has_protected_flags $target_hand $channel]} {
+	if {$target_hand ne "" && $target_hand ne "*" && [has_protected_flags $target_hand $channel]} {
 		putserv "NOTICE $nick :Cannot deop user with protected flags"
 		putserv "KICK $channel $nick :Nice try"
 		return
 	}
-	
-	# Self-deop is allowed
-	if {[string tolower $who] eq [string tolower $nick]} {
-		putserv "MODE $channel -o $nick"
-		return
-	}
-	
+
 	# Check if target is actually op'd
 	if {![isop $who $channel]} {
 		putserv "NOTICE $nick :$who is not op'd on $channel"
 		return
 	}
-	
+
 	# Perform deop
 	putserv "MODE $channel -o $who"
 	putlog "$nick deopped $who from $channel"
@@ -1429,45 +1450,60 @@ proc pub_do_deop {nick host handle channel args} {
 
 proc pub_do_devoice {nick host handle channel args} {
 	global botnick cc
-	
-	set who [lindex $args 0]
-	
-	if {$who eq ""} {
-		putserv "MODE $channel -v $nick"
+
+	if {![access:require $nick $handle $channel [access:rank_of voice] "devoice anyone"]} {
 		return
 	}
-	
+
+	set who [mode:target $args $nick]
+
+	if {![botisop $channel]} {
+		putserv "NOTICE $nick :I am not op on $channel!"
+		return
+	}
+
+	# Self-devoice comes before the protections, same as !deop
+	if {[string equal -nocase $who $nick]} {
+		if {![isvoice $nick $channel]} {
+			putserv "NOTICE $nick :You are not voiced on $channel"
+			return
+		}
+		putserv "MODE $channel -v $nick"
+		putlog "$nick devoiced himself in $channel"
+		return
+	}
+
 	# Protect service bots
 	if {[is_protected_bot $who]} {
 		putserv "NOTICE $nick :Cannot devoice protected service bot $who"
 		return
 	}
-	
+
 	# Protect the bot
-	if {[string tolower $who] eq [string tolower $botnick]} {
-		putserv "MODE $channel -v $nick"
+	if {[string equal -nocase $who $botnick]} {
+		putserv "NOTICE $nick :I won't devoice myself"
 		return
 	}
-	
+
+	if {![onchan $who $channel]} {
+		putserv "NOTICE $nick :$who is not on $channel"
+		return
+	}
+
 	# Protect users with protected flags
 	set target_hand [nick2hand $who $channel]
-	if {$target_hand ne "*" && [has_protected_flags $target_hand $channel]} {
+	if {$target_hand ne "" && $target_hand ne "*" && [has_protected_flags $target_hand $channel]} {
+		putserv "NOTICE $nick :Cannot devoice user with protected flags"
 		putserv "KICK $channel $nick :Nice try"
 		return
 	}
-	
-	# Self-devoice allowed
-	if {[string tolower $who] eq [string tolower $nick]} {
-		putserv "MODE $channel -v $nick"
-		return
-	}
-	
+
 	# Check if actually voiced
 	if {![isvoice $who $channel]} {
 		putserv "NOTICE $nick :$who is not voiced on $channel"
 		return
 	}
-	
+
 	# Perform devoice
 	putserv "MODE $channel -v $who"
 	putlog "$nick devoiced $who in $channel"
@@ -1626,34 +1662,32 @@ proc pub_do_invite {nick host handle channel text} {
 
 proc pub_do_op {nick host handle channel args} {
 	global botnick
-	
-	set who [lindex $args 0]
-	
-	if {$who eq ""} {
-		if {![botisop $channel]} {
-			putserv "NOTICE $nick :I am not op on $channel!"
-			return
-		}
-		
-		if {[isop $nick $channel]} {
-			putserv "NOTICE $nick :You're already op"
-			return
-		}
-		
-		putserv "MODE $channel +o $nick"
+
+	if {![access:require $nick $handle $channel [access:rank_of op] "op anyone"]} {
 		return
 	}
-	
+
+	set who [mode:target $args $nick]
+
 	if {![botisop $channel]} {
 		putserv "NOTICE $nick :I am not op on $channel!"
 		return
 	}
-	
-	if {[isop $who $channel]} {
-		putserv "NOTICE $nick :$who is already op"
+
+	if {![onchan $who $channel]} {
+		putserv "NOTICE $nick :$who is not on $channel"
 		return
 	}
-	
+
+	if {[isop $who $channel]} {
+		if {[string equal -nocase $who $nick]} {
+			putserv "NOTICE $nick :You are already op on $channel"
+		} else {
+			putserv "NOTICE $nick :$who is already op on $channel"
+		}
+		return
+	}
+
 	putserv "MODE $channel +o $who"
 	putlog "$nick made me op $who in $channel"
 	chanlog $channel "ACCESS" "$nick opped \002$who\002"
@@ -1676,8 +1710,18 @@ proc pub_do_op:msg {nick host handle text} {
 		return
 	}
 
-	if {![matchattr $handle n] && ![matchattr $handle o|o $chan]} {
-		puthelp "NOTICE $nick :You do not have op access on $chan"
+	if {$handle eq "" || $handle eq "*" || ![validuser $handle]} {
+		puthelp "NOTICE $nick :You are not in my user list, so I cannot op anyone on $chan."
+		return
+	}
+
+	set my_rank [access:rank $handle $chan]
+	if {$my_rank < [access:rank_of op]} {
+		if {$my_rank == 0} {
+			puthelp "NOTICE $nick :You are not an \002Op\002 in the user list on $chan, so I cannot op anyone there."
+		} else {
+			puthelp "NOTICE $nick :You are \002[access:label $my_rank]\002 on $chan, not \002Op\002, so I cannot op anyone there."
+		}
 		chanlog $chan "DENIED" "$nick tried to op by /msg"
 		return
 	}
@@ -1687,34 +1731,32 @@ proc pub_do_op:msg {nick host handle text} {
 
 proc pub_do_voice {nick host handle channel args} {
 	global botnick
-	
-	set who [lindex $args 0]
-	
-	if {$who eq ""} {
-		if {![botisop $channel]} {
-			putserv "NOTICE $nick :I am not op on $channel!"
-			return
-		}
-		
-		if {[isvoice $nick $channel]} {
-			putserv "MODE $channel +v $nick"
-			return
-		}
-		
-		putserv "MODE $channel +v $nick"
+
+	if {![access:require $nick $handle $channel [access:rank_of voice] "voice anyone"]} {
 		return
 	}
-	
+
+	set who [mode:target $args $nick]
+
 	if {![botisop $channel]} {
 		putserv "NOTICE $nick :I am not op on $channel!"
 		return
 	}
-	
-	if {[isvoice $who $channel]} {
-		putserv "NOTICE $nick :$who is already voiced"
+
+	if {![onchan $who $channel]} {
+		putserv "NOTICE $nick :$who is not on $channel"
 		return
 	}
-	
+
+	if {[isvoice $who $channel]} {
+		if {[string equal -nocase $who $nick]} {
+			putserv "NOTICE $nick :You are already voiced on $channel"
+		} else {
+			putserv "NOTICE $nick :$who is already voiced on $channel"
+		}
+		return
+	}
+
 	putserv "MODE $channel +v $who"
 	putlog "$nick voiced $who in $channel"
 	chanlog $channel "ACCESS" "$nick voiced \002$who\002"
@@ -2297,6 +2339,128 @@ proc access:caller_rank {nick hand chan} {
 	return [access:rank $hand $chan]
 }
 
+# The rank a level name sits at, so the mode commands can ask for
+# [access:rank_of op] instead of a bare 3.
+proc access:rank_of {name} {
+	set row [access:by_name $name]
+	if {$row eq ""} {
+		return 0
+	}
+	return [lindex $row 0]
+}
+
+# The gatekeeper for the channel mode commands - !op !deop !voice !devoice.
+#
+# Those four are bound open on purpose. A bind flag mask that does not match
+# makes eggdrop drop the command without a word, which is what people mean
+# when they say "I typed !op and nothing happened". The level is decided here
+# instead, and every refusal is explained.
+#
+# Somebody the bot has never heard of gets a notice only - a stranger should
+# not be able to make the bot talk to the channel. A registered user who is
+# simply not high enough is told in the channel, which is where he asked.
+proc access:require {nick hand chan need action} {
+	global cc botnick
+
+	set c [string trim $cc(cmdchar)]
+	set needed [access:label $need]
+
+	if {$hand eq "" || $hand eq "*" || ![validuser $hand]} {
+		puthelp "NOTICE $nick :You are not in my user list, so I cannot $action on $chan. You need \002$needed\002 access - try /msg $botnick register, or ask a channel op to add you."
+		return 0
+	}
+
+	set rank [access:rank $hand $chan]
+
+	if {$rank < $need} {
+		if {$rank == 0} {
+			putserv "PRIVMSG $chan :$nick: you are not an \002$needed\002 in the user list on $chan, so I cannot $action. (${c}verify shows your access)"
+		} else {
+			putserv "PRIVMSG $chan :$nick: you are \002[access:label $rank]\002 on $chan, not \002$needed\002, so I cannot $action. (${c}verify shows your access)"
+		}
+		chanlog $chan "DENIED" "$nick ([access:label $rank]) tried to $action"
+		return 0
+	}
+
+	return 1
+}
+
+# The nick a mode command was aimed at. Falls back to the caller when nothing
+# was given, and keeps only the first word, so "!op bob joe" cannot turn into
+# a MODE for a nick called "bob joe".
+proc mode:target {arglist fallback} {
+	set who [lindex [split [string trim [join $arglist " "]]] 0]
+	if {$who eq ""} {
+		return $fallback
+	}
+	return $who
+}
+
+# Put the channel modes where the access level says they belong.
+#
+# Op, Master and Owner wear +o. Voice and Mod wear +v. Somebody who has just
+# lost his level loses both. Called straight after the flags are written, so
+# !addop really does op the man and !delop really does take it back.
+proc access:sync_modes {nick handle chan rank} {
+	global botnick
+
+	set who [hand2nick $handle $chan]
+	if {$who eq "" || $who eq "*"} {
+		return
+	}
+
+	if {[is_protected_bot $who] || [string equal -nocase $who $botnick]} {
+		return
+	}
+
+	set want_op [expr {$rank >= [access:rank_of op]}]
+	set want_voice [expr {$rank >= [access:rank_of voice]}]
+
+	set changes [list]
+
+	if {$want_op} {
+		if {![isop $who $chan]} {
+			lappend changes "+o"
+		}
+		# A voice sitting next to an op does no harm - leave it alone
+	} else {
+		if {[isop $who $chan]} {
+			lappend changes "-o"
+		}
+		# isop still reads true here because the -o above has not landed
+		# yet, so the voice is decided from the level being set instead.
+		if {$want_voice} {
+			if {![isvoice $who $chan]} {
+				lappend changes "+v"
+			}
+		} else {
+			if {[isvoice $who $chan]} {
+				lappend changes "-v"
+			}
+		}
+	}
+
+	if {![llength $changes]} {
+		return
+	}
+
+	if {![botisop $chan]} {
+		puthelp "NOTICE $nick :I am not op on $chan, so I could not set [join $changes " "] on \002$who\002. The access itself is saved."
+		return
+	}
+
+	# One MODE line: "-o+v bob bob" rather than two round trips
+	set modes ""
+	set targets [list]
+	foreach m $changes {
+		append modes $m
+		lappend targets $who
+	}
+
+	putserv "MODE $chan $modes [join $targets " "]"
+	putlog "ACCESS: $nick had me set [join $changes " "] on $who in $chan"
+}
+
 # !addvoice / !addmod / !addop / !addmaster all land here
 proc access:add {nick hand chan arg level} {
 	global cc
@@ -2360,6 +2524,9 @@ proc access:add {nick hand chan arg level} {
 		set what "moves down from \002[access:label $old_rank]\002 to \002$label\002"
 		set logged "demoted \002[access:label $old_rank]\002 -> \002$label\002 for"
 	}
+
+	# Now make the channel agree with the user list
+	access:sync_modes $nick $target_hand $chan $rank
 
 	puthelp "NOTICE $nick :\[OK\] \002$target_hand\002 $what on $chan (flags: [chattr $target_hand $chan])"
 	access:tell $target_hand $chan "Your access on $chan $what - set by $nick. Check it any time with ${c}verify"
@@ -2437,6 +2604,9 @@ proc access:del {nick hand chan arg level} {
 	set had [access:label $old_rank]
 	access:apply $target_hand $chan 0
 	save
+
+	# And take the matching channel modes back off him
+	access:sync_modes $nick $target_hand $chan 0
 
 	puthelp "NOTICE $nick :\[OK\] \002$target_hand\002 is no longer \002$had\002 on $chan - no access left (flags: [chattr $target_hand $chan])"
 	access:tell $target_hand $chan "Your \002$had\002 access on $chan was removed by $nick."
@@ -2529,17 +2699,19 @@ proc delaccess:pub {nick uhost hand chan arg} { access:del $nick $hand $chan $ar
 
 proc access:pub {nick uhost hand chan arg} { access:list $nick $chan $arg }
 
-# The binds only let through people who could possibly pass the rank check
-# inside the proc - the rank check itself is what actually decides.
-bind pub nmMo|nmMo [string trim $cc(cmdchar)]addvoice addvoice:pub
-bind pub nmMo|nmMo [string trim $cc(cmdchar)]delvoice delvoice:pub
-bind pub nmo|nmo [string trim $cc(cmdchar)]addmod addmod:pub
-bind pub nmo|nmo [string trim $cc(cmdchar)]delmod delmod:pub
-bind pub nm|nm [string trim $cc(cmdchar)]addop addop:pub
-bind pub nm|nm [string trim $cc(cmdchar)]delop delop:pub
-bind pub n|n [string trim $cc(cmdchar)]addmaster addmaster:pub
-bind pub n|n [string trim $cc(cmdchar)]delmaster delmaster:pub
-bind pub nmo|nmo [string trim $cc(cmdchar)]delaccess delaccess:pub
+# Bound open, for the same reason as !op and friends: access:add and
+# access:del decide the level themselves and explain every refusal, whereas a
+# bind flag mask that does not match just makes the bot sit there. Someone who
+# is not high enough is told so instead of being ignored.
+bind pub - [string trim $cc(cmdchar)]addvoice addvoice:pub
+bind pub - [string trim $cc(cmdchar)]delvoice delvoice:pub
+bind pub - [string trim $cc(cmdchar)]addmod addmod:pub
+bind pub - [string trim $cc(cmdchar)]delmod delmod:pub
+bind pub - [string trim $cc(cmdchar)]addop addop:pub
+bind pub - [string trim $cc(cmdchar)]delop delop:pub
+bind pub - [string trim $cc(cmdchar)]addmaster addmaster:pub
+bind pub - [string trim $cc(cmdchar)]delmaster delmaster:pub
+bind pub - [string trim $cc(cmdchar)]delaccess delaccess:pub
 bind pub nmMo|nmMo [string trim $cc(cmdchar)]access access:pub
 
 proc pub_whois {nick uhost handle chan text} {

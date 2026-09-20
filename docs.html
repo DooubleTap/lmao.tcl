@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lmao.tcl v6.4 — Documentation</title>
+<title>lmao.tcl v6.5 — Documentation</title>
 <style>
 :root{
   --bg:#0b0e13;
@@ -224,7 +224,7 @@ footer a{color:var(--muted)}
 <nav class="sidebar">
   <div class="logo">
     <span class="leaf">😂</span>
-    <div><b>lmao<span>.tcl</span></b><small>v6.4.0 · DOCUMENTATION</small></div>
+    <div><b>lmao<span>.tcl</span></b><small>v6.5.0 · DOCUMENTATION</small></div>
   </div>
   <input id="search" type="text" placeholder="Filter commands… ( / )" autocomplete="off">
   <div class="search-hint"><span id="search-count"></span>&nbsp;</div>
@@ -267,7 +267,7 @@ footer a{color:var(--muted)}
   <p class="tagline">Channel management for eggdrop — <em>every reply by notice, never in your channel.</em><br>
   A complete reference for every command, module and protection.</p>
   <div class="badges">
-    <span class="badge hot">v6.4.0</span>
+    <span class="badge hot">v6.5.0</span>
     <span class="badge">Eggdrop ≥ 1.8</span>
     <span class="badge">Tcl ≥ 8.5</span>
     <span class="badge gold">Undernet · ircu · X service</span>
@@ -288,7 +288,7 @@ footer a{color:var(--muted)}
     protecting.
   </p>
   <table>
-    <tr><th style="width:170px">Script</th><td>lmao.tcl v6.4.0</td></tr>
+    <tr><th style="width:170px">Script</th><td>lmao.tcl v6.5.0</td></tr>
     <tr><th>Repository</th><td><a href="https://github.com/DooubleTap/lmao.tcl">github.com/DooubleTap/lmao.tcl</a></td></tr>
     <tr><th>Requirements</th><td>Eggdrop 1.8 or newer (tested on 1.10.1) · Tcl 8.5 or newer</td></tr>
     <tr><th>Network</th><td>Written for Undernet ircu — aware of the <code>X</code> and <code>W</code> services</td></tr>
@@ -318,7 +318,7 @@ source scripts/lmao.tcl</pre></div>
 .rehash</pre></div>
 
   <p>You should see this in the partyline and the log:</p>
-  <div class="code reply"><span class="tag">output</span><button class="copy" title="Copy">⧉</button><pre><span class="n">[lmao.tcl 6.4.0] - Complete production ready version</span>
+  <div class="code reply"><span class="tag">output</span><button class="copy" title="Copy">⧉</button><pre><span class="n">[lmao.tcl 6.5.0] - Complete production ready version</span>
 <span class="n">Loaded successfully - ready to serve!</span></pre></div>
 
   <div class="note"><b>Edit the config first.</b> <code>cc(mainchan)</code> and <code>cc(backchan)</code>
@@ -1149,6 +1149,15 @@ That code is good for 5 minutes. If you did not ask for this, ignore it - nothin
 <section id="changelog">
   <h2><span class="hash">#</span>Changelog</h2>
 
+  <h3 class="sub">6.5.0</h3>
+  <table>
+    <tr><th style="width:190px"><code>!op</code> said nothing</th><td><strong>Fix.</strong> <code>!op</code>, <code>!deop</code>, <code>!voice</code>, <code>!devoice</code> and the <code>!add…</code> / <code>!del…</code> access commands were gated by a bind flag mask. When the mask did not match, eggdrop dropped the line without a word — a registered user typed <code>!op</code> and nothing whatsoever happened. Those binds are open now and the level is decided inside the command, so there is always an answer.</td></tr>
+    <tr><th>Errors are said out loud</th><td>A registered user who is not high enough is told in the channel: <em>"you are not an <b>Op</b> in the user list on #chan, so I cannot op anyone"</em>, or <em>"you are <b>Voice</b> on #chan, not <b>Op</b>"</em>. Somebody the bot has no record for gets a notice instead, so a stranger cannot make the bot talk to the channel. Every refusal is logged through <code>chanlog</code>.</td></tr>
+    <tr><th>Access sets the modes</th><td><code>!addop</code> and <code>!addmaster</code> now op the user (<code>+o</code>) in the channel, <code>!addvoice</code> and <code>!addmod</code> voice them (<code>+v</code>), and <code>!delop</code>, <code>!delvoice</code>, <code>!delmod</code>, <code>!delmaster</code> and <code>!delaccess</code> take those modes back off. A demotion from Op to Mod goes out as one <code>-o+v</code>. If the bot is not opped it says so and the access is still saved.</td></tr>
+    <tr><th>Self-deop</th><td><code>!deop</code> and <code>!devoice</code> on your own nick are handled before the flag protections, so an owner or master naming himself is no longer kicked with <em>"Nice try"</em> for it.</td></tr>
+    <tr><th>Tighter targets</th><td>The mode commands now check the target is actually on the channel, and take only the first word — <code>!op bob joe</code> can no longer produce a MODE for a nick called <code>bob joe</code>.</td></tr>
+  </table>
+
   <h3 class="sub">6.4.0</h3>
   <table>
     <tr><th style="width:190px">Bind flag masks</th><td><strong>Fix.</strong> Masks were written <code>n|m</code>, and eggdrop reads that as <em>global owner</em> or <em>channel master</em> — somebody holding master globally and nothing on the channel matched neither half, so the command silently did nothing at all. Both halves now carry the same letters (<code>nm|nm</code>, <code>no|no</code>, <code>nmMo|nmMo</code>…), which is what makes <code>!addop</code> and friends answer for global staff. The real authorisation is still the rank check inside each command.</td></tr>
@@ -1179,7 +1188,7 @@ That code is good for 5 minutes. If you did not ask for this, ignore it - nothin
 </section>
 
 <footer>
-  <b>lmao.tcl v6.4.0</b> — channel management for eggdrop ·
+  <b>lmao.tcl v6.5.0</b> — channel management for eggdrop ·
   <a href="https://github.com/DooubleTap/lmao.tcl">GitHub</a> ·
   GPLv3<br>
   Documentation generated 2026-09-17. For eggdrop 1.8+ on Undernet.
