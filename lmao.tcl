@@ -45,7 +45,7 @@ set cc(register_handle_max) 9
 set cc(register_flags) ""
 
 # Version info
-set cc(version_number) "6.5.1"
+set cc(version_number) "6.5.2"
 set cc(version) "\002\[lmao.tcl $cc(version_number)\]\002"
 set cc(www) "https://github.com/DooubleTap/lmao.tcl"
 
@@ -194,6 +194,7 @@ bind pub n [string trim $cc(cmdchar)]part part:pub
 bind pub n [string trim $cc(cmdchar)]comeback comeback:pub
 bind pub n [string trim $cc(cmdchar)]join join:pub
 bind pub n [string trim $cc(cmdchar)]addchan addchan:pub
+bind msg - addchan addchan:msg
 bind pub n [string trim $cc(cmdchar)]delchan delchan:pub
 bind pub n [string trim $cc(cmdchar)]suschan suschan:pub
 bind pub n [string trim $cc(cmdchar)]unsuschan unsuschan:pub
@@ -481,7 +482,7 @@ array set helpdb {
 	idledeop	{{%C%idledeop <#channel> [minutes]} {Sets the idle-deop timer for a channel (default 180 minutes). Master+ only. Switch it off with %C%disable idledeop} {%C%idledeop #canada 180} {}}
 	chanset		{{%C%chanset <+|->setting} {Toggles a per-channel setting: youtube, weather, needhelp, isup} {%C%chanset +weather} {}}
 	join		{{%C%join <#channel>} {Makes the bot join a channel and adds it to the channel list (owner only)} {%C%join #newchan} {}}
-	addchan		{{%C%addchan <#channel>} {Adds a channel, saves it to the chanfile and joins it} {%C%addchan #newchan} {}}
+	addchan		{{%C%addchan <#channel>} {Adds a channel, saves it to the chanfile and joins it} {%C%addchan #newchan} {/msg %B% addchan #newchan}}
 	delchan		{{%C%delchan <#channel>} {Removes the channel from the bot and chanfile without deleting users} {%C%delchan #oldchan} {}}
 	suschan		{{%C%suschan <#channel>} {Suspends a channel, makes the bot leave and keeps its channel/user data} {%C%suschan #channel} {}}
 	unsuschan	{{%C%unsuschan <#channel>} {Unsuspends a channel and makes the bot join it again} {%C%unsuschan #channel} {}}
@@ -2047,6 +2048,26 @@ proc addchan:pub {nick uhost hand chan text} {
 	savechannels
 	putlog "$nick added channel $target"
 	chanlog "" "BOT" "$nick added channel \002$target\002"
+}
+
+# /msg <bot> addchan #channel - owner-only channel setup without DCC.
+# MSG binds are intentionally open so an unauthorized owner is told why it
+# failed instead of Eggdrop silently dropping the command.
+proc addchan:msg {nick uhost hand text} {
+	global botnick cc
+
+	if {![matchattr $hand n]} {
+		puthelp "NOTICE $nick :You do not have owner access for addchan."
+		return
+	}
+
+	set target [string trim [lindex [split $text] 0]]
+	if {$target eq ""} {
+		puthelp "NOTICE $nick :Try: /msg $botnick addchan <#channel>"
+		return
+	}
+
+	addchan:pub $nick $uhost $hand "" $target
 }
 
 proc delchan:pub {nick uhost hand chan text} {
