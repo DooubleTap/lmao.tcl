@@ -2030,9 +2030,15 @@ proc addchan:pub {nick uhost hand chan text} {
 		return
 	}
 	if {[validchan $target]} {
-		channel set $target -inactive
-		if {![onchan $botnick $target]} { putserv "JOIN :$target" }
-		putserv "NOTICE $nick :$target was already configured. Unsuspended and joined it."
+		if {[channel get $target inactive]} {
+			channel set $target -inactive
+			putserv "NOTICE $nick :$target was suspended. Unsuspended it and requested a join."
+		} elseif {![onchan $botnick $target]} {
+			putserv "JOIN :$target"
+			putserv "NOTICE $nick :$target was already configured. Requested a join."
+		} else {
+			putserv "NOTICE $nick :$target is already configured and I am already there."
+		}
 	} else {
 		channel add $target
 		putserv "JOIN :$target"
@@ -2074,7 +2080,6 @@ proc suschan:pub {nick uhost hand chan text} {
 		return
 	}
 	channel set $target +inactive
-	if {[onchan $botnick $target]} { putserv "PART $target :Channel suspended" }
 	savechannels
 	putserv "NOTICE $nick :Suspended $target. I have left it, but the channel record and users were kept."
 	putlog "$nick suspended channel $target"
