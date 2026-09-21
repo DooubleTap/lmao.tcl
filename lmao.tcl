@@ -193,6 +193,10 @@ bind pub n [string trim $cc(cmdchar)]global pub:global
 bind pub n [string trim $cc(cmdchar)]part part:pub
 bind pub n [string trim $cc(cmdchar)]comeback comeback:pub
 bind pub n [string trim $cc(cmdchar)]join join:pub
+bind pub n [string trim $cc(cmdchar)]addchan addchan:pub
+bind pub n [string trim $cc(cmdchar)]delchan delchan:pub
+bind pub n [string trim $cc(cmdchar)]suschan suschan:pub
+bind pub n [string trim $cc(cmdchar)]unsuschan unsuschan:pub
 bind pub n [string trim $cc(cmdchar)]botnick botnick:pub
 bind pub nm|nm [string trim $cc(cmdchar)]adduser adduser:pub
 bind pub nm|nm [string trim $cc(cmdchar)]deluser deluser:pub
@@ -477,6 +481,10 @@ array set helpdb {
 	idledeop	{{%C%idledeop <#channel> [minutes]} {Sets the idle-deop timer for a channel (default 180 minutes). Master+ only. Switch it off with %C%disable idledeop} {%C%idledeop #canada 180} {}}
 	chanset		{{%C%chanset <+|->setting} {Toggles a per-channel setting: youtube, weather, needhelp, isup} {%C%chanset +weather} {}}
 	join		{{%C%join <#channel>} {Makes the bot join a channel and adds it to the channel list (owner only)} {%C%join #newchan} {}}
+	addchan		{{%C%addchan <#channel>} {Adds a channel, saves it to the chanfile and joins it} {%C%addchan #newchan} {}}
+	delchan		{{%C%delchan <#channel>} {Removes the channel from the bot and chanfile without deleting users} {%C%delchan #oldchan} {}}
+	suschan		{{%C%suschan <#channel>} {Suspends a channel, makes the bot leave and keeps its channel/user data} {%C%suschan #channel} {}}
+	unsuschan	{{%C%unsuschan <#channel>} {Unsuspends a channel and makes the bot join it again} {%C%unsuschan #channel} {}}
 	part		{{%C%part <#channel>} {Makes the bot leave a channel and removes it from the channel list (owner only)} {%C%part #oldchan} {}}
 	comeback	{{%C%comeback} {Makes the bot part and rejoin this channel (owner only)} {%C%comeback} {}}
 	botnick		{{%C%botnick <newnick>} {Changes the bot nickname (owner only)} {%C%botnick newbotnick} {}}
@@ -2007,6 +2015,89 @@ proc hop:mode {nick uhost hand chan mc vict} {
 			putserv "KICK $chan $nick"
 		}
 	}
+}
+
+
+proc addchan:pub {nick uhost hand chan text} {
+	global botnick cc
+	set target [string trim [lindex $text 0]]
+	if {$target eq ""} {
+		putserv "NOTICE $nick :Try: [string trim $cc(cmdchar)]addchan <#channel>"
+		return
+	}
+	if {![string match "#*" $target]} {
+		putserv "NOTICE $nick :Channel must start with #"
+		return
+	}
+	if {[validchan $target]} {
+		channel set $target -inactive
+		if {![onchan $botnick $target]} { putserv "JOIN :$target" }
+		putserv "NOTICE $nick :$target was already configured. Unsuspended and joined it."
+	} else {
+		channel add $target
+		putserv "JOIN :$target"
+		putserv "NOTICE $nick :Added $target and joined it."
+	}
+	savechannels
+	putlog "$nick added channel $target"
+	chanlog "" "BOT" "$nick added channel \002$target\002"
+}
+
+proc delchan:pub {nick uhost hand chan text} {
+	global botnick cc
+	set target [string trim [lindex $text 0]]
+	if {$target eq ""} {
+		putserv "NOTICE $nick :Try: [string trim $cc(cmdchar)]delchan <#channel>"
+		return
+	}
+	if {![validchan $target]} {
+		putserv "NOTICE $nick :$target is not configured."
+		return
+	}
+	if {[onchan $botnick $target]} { putserv "PART $target :Channel removed" }
+	channel remove $target
+	savechannels
+	putserv "NOTICE $nick :Removed $target from the bot and chanfile. User accounts were not deleted."
+	putlog "$nick removed channel $target"
+	chanlog "" "BOT" "$nick removed channel \002$target\002 (users preserved)"
+}
+
+proc suschan:pub {nick uhost hand chan text} {
+	global botnick cc
+	set target [string trim [lindex $text 0]]
+	if {$target eq ""} {
+		putserv "NOTICE $nick :Try: [string trim $cc(cmdchar)]suschan <#channel>"
+		return
+	}
+	if {![validchan $target]} {
+		putserv "NOTICE $nick :$target is not configured."
+		return
+	}
+	channel set $target +inactive
+	if {[onchan $botnick $target]} { putserv "PART $target :Channel suspended" }
+	savechannels
+	putserv "NOTICE $nick :Suspended $target. I have left it, but the channel record and users were kept."
+	putlog "$nick suspended channel $target"
+	chanlog "" "BOT" "$nick suspended channel \002$target\002"
+}
+
+proc unsuschan:pub {nick uhost hand chan text} {
+	global botnick cc
+	set target [string trim [lindex $text 0]]
+	if {$target eq ""} {
+		putserv "NOTICE $nick :Try: [string trim $cc(cmdchar)]unsuschan <#channel>"
+		return
+	}
+	if {![validchan $target]} {
+		putserv "NOTICE $nick :$target is not configured."
+		return
+	}
+	channel set $target -inactive
+	putserv "JOIN :$target"
+	savechannels
+	putserv "NOTICE $nick :Unsuspended $target and requested a join."
+	putlog "$nick unsuspended channel $target"
+	chanlog "" "BOT" "$nick unsuspended channel \002$target\002"
 }
 
 proc join:pub {nick uhost hand chan text} {
