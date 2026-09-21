@@ -17,10 +17,10 @@ set cc(mainchan) "#mainchan"
 set cc(backchan) "#secretchan"
 
 # Back channel modes
-set cc(backmode) "+s"
+set cc(backmode) "+snt"
 
 # Idle deop configuration
-set cc(idledeop_enabled) 1
+set cc(idledeop_enabled) 0
 set cc(idledeop_default_minutes) 180
 set cc(idledeop_check_interval) 300
 
@@ -59,7 +59,7 @@ array set module_settings {}
 # Default module state (1 = enabled, 0 = disabled)
 set module_defaults(topic) 1
 set module_defaults(activevoice) 1
-set module_defaults(idledeop) 1
+set module_defaults(idledeop) 0
 set module_defaults(idledevoice) 1
 set module_defaults(chanlog) 1
 
